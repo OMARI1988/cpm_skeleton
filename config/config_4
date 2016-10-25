@@ -14,10 +14,10 @@ modelID = 1
 ## don't edit this part
 
 [[1]]
-caffemodel_person = '../../model/_trained_person_MPI/pose_iter_70000.caffemodel'
-deployFile_person = '../../model/_trained_person_MPI/pose_deploy_copy_4sg_resize.prototxt'
-caffemodel = '../../model/_trained_FLIC/pose_iter_40000.caffemodel'
-deployFile = '../../model/_trained_FLIC/pose_deploy.prototxt'
+caffemodel_person = '_trained_person_MPI/pose_iter_70000.caffemodel'
+deployFile_person = '_trained_person_MPI/pose_deploy_copy_4sg_resize.prototxt'
+caffemodel = '_trained_FLIC/pose_iter_40000.caffemodel'
+deployFile = '_trained_FLIC/pose_deploy.prototxt'
 description = 'FLIC (upper body only) 4-stage CPM'
 boxsize = 368
 np = 9
