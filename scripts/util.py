@@ -5,36 +5,72 @@ from IPython.display import Image, display
 import cv2
 import getpass
 
+def make_X(x,z):
+    return int(x*525.0/z +319.5)
+
+def make_Y(y,z):
+   return int(y*(-525.0)/z+ 239.5)
+
+def scale_and_centre_torso(f1,img,sz):
+    margin=0.3 #(percentage of the skeleton length) padding around the skeleton to prevent features being cropped out
+    cols=img.shape[1]
+    rows=img.shape[0]
+    max_x, max_y=-1000,-1000
+    min_x, min_y= 1000, 1000
+    min_x_id,min_y_id,max_x_id,max_y_id=-1,-1,-1,-1
+    skeleton_data=dict()
+    #read the skeleton data from skl file
+    for count,line in enumerate(f1):
+        if count == 0:
+            t = line.split(':')[1].split('\n')[0]
+        # read the joint name
+        elif (count-1)%11 == 0:
+            j = line.split('\n')[0]
+            skeleton_data[j] = []
+        # read the x value
+        elif (count-1)%11 == 2:
+            x = float(line.split('\n')[0].split(':')[1])
+            skeleton_data[j].append(x)
+            if x>max_x:
+                max_x=x
+                max_x_id=j
+            if x<min_x:
+                min_x=x
+                min_x_id=j
+        # read the y value
+        elif (count-1)%11 == 3:
+            y = float(line.split('\n')[0].split(':')[1])
+            skeleton_data[j].append(y)
+            if y>max_y:
+                max_y=y
+                max_y_id=j
+            if y<min_y:
+                min_y=y
+                min_y_id=j
+        # read the z value
+        elif (count-1)%11 == 4:
+            z = float(line.split('\n')[0].split(':')[1])
+    skeleton_data[j].append(z)
+    #scale the image to center around the torso
+    max_x = make_X(max_x,skeleton_data[max_x_id][2])
+    min_x = make_X(min_x,skeleton_data[min_x_id][2])
+    max_y = rows-make_Y(max_y,skeleton_data[max_y_id][2])
+    min_y = rows-make_Y(min_y,skeleton_data[min_y_id][2])
+    torso_x = make_X(skeleton_data["torso"][0],skeleton_data["torso"][2]);
+    torso_y = rows-make_Y(skeleton_data["torso"][1],skeleton_data["torso"][2]);
+    scaling_f=max(max_y-min_y,max_x-min_x)
+    scaling_f_2=int(max(torso_y-min_y,torso_x-min_x)+(margin*scaling_f))
+    M = np.float32([[1,0,-(torso_x-scaling_f_2)],[0,1,-(torso_y-scaling_f_2)]])
+    dst = cv2.warpAffine(img,M,(cols,rows),borderValue=0.8)
+    crop_dst = cv2.resize(dst[0:2*scaling_f_2,0:2*scaling_f_2], (sz,sz))
+    return crop_dst
+
+
 def showBGRimage(name, a, fmt='jpg'):
-    # print a
     a = np.uint8(np.clip(a, 0, 255))
-#    a[:,:,[0,2]] = a[:,:,[2,0]] # for B,G,R order
     cv2.imshow(name,a)
     cv2.waitKey(2000)
     cv2.imwrite(name+'.'+fmt,a)
-    # print a
-    # f = StringIO()
-    # PIL.Image.fromarray(a).save(f, fmt)
-    # display(Image(data=f.getvalue()))
-    # print 'test'
-
-def showmap(name,a, fmt='png'):
-    a = np.uint8(np.clip(a, 0, 255))
-    cv2.imshow(name,a)
-    cv2.waitKey(20)
-    cv2.imwrite('/home/omari/sk_cnn/images/'+name+'.'+fmt,a)
-
-    # f = StringIO()
-    # PIL.Image.fromarray(a).save(f, fmt)
-    # display(Image(data=f.getvalue()))
-
-#def checkparam(param):
-#    octave = param['octave']
-#    starting_range = param['starting_range']
-#    ending_range = param['ending_range']
-#    assert starting_range <= ending_range, 'starting ratio should <= ending ratio'
-#    assert octave >= 1, 'octave should >= 1'
-#    return starting_range, ending_range, octave
 
 def getJetColor(v, vmin, vmax):
     c = np.zeros((3))
@@ -88,5 +124,3 @@ def padRightDownCorner(img):
 
     return img_padded, pad
 
-#if __name__ == "__main__":
-#    config_reader()
