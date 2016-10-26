@@ -5,14 +5,31 @@ from IPython.display import Image, display
 import cv2
 import getpass
 
-def make_X(x,z):
-    return int(x*525.0/z +319.5)
+def make_X(x,z,fx,fy,cx,cy):
+    return int(x*fx/z +cx)
 
-def make_Y(y,z):
-   return int(y*(-525.0)/z+ 239.5)
+def make_Y(y,z,fx,fy,cx,cy):
+    return int(y*(-fy)/z+ cy)
+
+def read_yaml_calib():
+    try:
+        f= open('~/.ros/rgb_PS1080_PrimeSense.yaml','r')
+        X=yaml.load(f)
+        fx=X["camera_matrix"]["data"][0]
+        cx=X["camera_matrix"]["data"][2]
+        fy=X["camera_matrix"]["data"][4]
+        cy=X["camera_matrix"]["data"][5]
+    except:
+        print "Could not read yaml file, using default parameters."
+        fx=525.0
+        fy=525.0
+        cx=319.5
+        cy=239.5
+    return [fx,fy,cx,cy]
 
 def scale_and_centre_torso(f1,img,sz):
-    margin=0.3 #(percentage of the skeleton length) padding around the skeleton to prevent features being cropped out
+    [fx,fy,cx,cy] = read_yaml_calib()
+    margin=0.5 #(percentage of the skeleton length) padding around the skeleton to prevent features being cropped out
     cols=img.shape[1]
     rows=img.shape[0]
     max_x, max_y=-1000,-1000
@@ -50,14 +67,17 @@ def scale_and_centre_torso(f1,img,sz):
         # read the z value
         elif (count-1)%11 == 4:
             z = float(line.split('\n')[0].split(':')[1])
-    skeleton_data[j].append(z)
+            skeleton_data[j].append(z)
+    # print skeleton_data
+    # print skeleton_data[max_x_id]
+    # print '>>>>>>',max_x_id
     #scale the image to center around the torso
-    max_x = make_X(max_x,skeleton_data[max_x_id][2])
-    min_x = make_X(min_x,skeleton_data[min_x_id][2])
-    max_y = rows-make_Y(max_y,skeleton_data[max_y_id][2])
-    min_y = rows-make_Y(min_y,skeleton_data[min_y_id][2])
-    torso_x = make_X(skeleton_data["torso"][0],skeleton_data["torso"][2]);
-    torso_y = rows-make_Y(skeleton_data["torso"][1],skeleton_data["torso"][2]);
+    max_x = make_X(max_x,skeleton_data[max_x_id][2],fx,fy,cx,cy)
+    min_x = make_X(min_x,skeleton_data[min_x_id][2],fx,fy,cx,cy)
+    max_y = rows-make_Y(max_y,skeleton_data[max_y_id][2],fx,fy,cx,cy)
+    min_y = rows-make_Y(min_y,skeleton_data[min_y_id][2],fx,fy,cx,cy)
+    torso_x = make_X(skeleton_data["torso"][0],skeleton_data["torso"][2],fx,fy,cx,cy);
+    torso_y = rows-make_Y(skeleton_data["torso"][1],skeleton_data["torso"][2],fx,fy,cx,cy);
     scaling_f=max(max_y-min_y,max_x-min_x)
     scaling_f_2=int(max(torso_y-min_y,torso_x-min_x)+(margin*scaling_f))
     M = np.float32([[1,0,-(torso_x-scaling_f_2)],[0,1,-(torso_y-scaling_f_2)]])
@@ -65,6 +85,11 @@ def scale_and_centre_torso(f1,img,sz):
     crop_dst = cv2.resize(dst[0:2*scaling_f_2,0:2*scaling_f_2], (sz,sz))
     return crop_dst
 
+def saveBGRimage(name, a, fmt='jpg'):
+    a = np.uint8(np.clip(a, 0, 255))
+    #cv2.imshow(name,a)
+    #cv2.waitKey(2000)
+    cv2.imwrite(name+'.'+fmt,a)
 
 def showBGRimage(name, a, fmt='jpg'):
     a = np.uint8(np.clip(a, 0, 255))
