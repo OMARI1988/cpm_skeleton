@@ -27,6 +27,51 @@ def read_yaml_calib():
         cy=239.5
     return [fx,fy,cx,cy]
 
+def get_correct_person(f1,scale,camera_calib,X,Y):
+
+    [fx,fy,cx,cy] = camera_calib
+    torso_flag = 0
+    for count,line in enumerate(f1):
+        # read the joint name
+        if (count-1)%11 == 0:
+            j = line.split('\n')[0]
+            if j == 'torso':
+                torso_flag = 1
+        # read the x value
+        elif (count-1)%11 == 2:
+            if torso_flag:
+                x = float(line.split('\n')[0].split(':')[1])
+        # read the y value
+        elif (count-1)%11 == 3:
+            if torso_flag:
+                y = float(line.split('\n')[0].split(':')[1])
+        # read the z value
+        elif (count-1)%11 == 4:
+            if torso_flag:
+                z = float(line.split('\n')[0].split(':')[1])
+            if torso_flag:
+                torso_flag = 0
+    #2D data
+    x2d = int(int(x*fx/z*1 +cx)*scale);
+    y2d = int(int(y*fy/z*1+cy)*scale);
+
+    distance_min = 1000
+    distance_threshold = 50
+    person = []
+    id = 0
+    for x1,y1 in zip(X,Y):
+        distance = np.sqrt((x1-x2d)**2 + (y1-y2d)**2)
+        if distance < distance_min and distance < distance_threshold:
+            person = id
+        id+=1
+    if person != []:
+        x = [X[person]]; y = [Y[person]]
+    else:
+        x = []; y = []
+    return [x,y]
+
+
+
 def scale_and_centre_torso(f1,img,sz):
     [fx,fy,cx,cy] = read_yaml_calib()
     margin=0.5 #(percentage of the skeleton length) padding around the skeleton to prevent features being cropped out
@@ -68,9 +113,6 @@ def scale_and_centre_torso(f1,img,sz):
         elif (count-1)%11 == 4:
             z = float(line.split('\n')[0].split(':')[1])
             skeleton_data[j].append(z)
-    # print skeleton_data
-    # print skeleton_data[max_x_id]
-    # print '>>>>>>',max_x_id
     #scale the image to center around the torso
     max_x = make_X(max_x,skeleton_data[max_x_id][2],fx,fy,cx,cy)
     min_x = make_X(min_x,skeleton_data[min_x_id][2],fx,fy,cx,cy)
@@ -94,8 +136,8 @@ def saveBGRimage(name, a, fmt='jpg'):
 def showBGRimage(name, a, fmt='jpg'):
     a = np.uint8(np.clip(a, 0, 255))
     cv2.imshow(name,a)
-    cv2.waitKey(2000)
-    cv2.imwrite(name+'.'+fmt,a)
+    cv2.waitKey(500)
+    #cv2.imwrite(name+'.'+fmt,a)
 
 def getJetColor(v, vmin, vmax):
     c = np.zeros((3))

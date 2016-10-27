@@ -13,8 +13,10 @@ import os
 import glob
 
 # init
-directory = '/home/lucie02/SkeletonDataset/no_consent/'
+camera_calib = util.read_yaml_calib()
+directory = '/home/lucie02/'
 dates = sorted(os.listdir(directory))
+dates = ['2016-10-27']
 files = sorted(os.listdir(directory+dates[0]))
 # print dates[0]
 # print files[0]
@@ -45,76 +47,79 @@ starts['all'] = []
 ends['all'] = []
 
 # main loop
-
-for test_img,test_skl in zip(rgb_files,skl_files):
-    starts['all'].append(time.time())
-
+for test_image,test_skl in zip(rgb_files,skl_files):
     # block 1
-    #test_image = path+'/data/rgb_00216.jpg'
-    img = cv.imread(test_img)
-    #scale = boxsize/(img.shape[0] * 1.0)
-    #imageToTest2 = cv.resize(img, (0,0), fx=scale, fy=scale, interpolation=cv.INTER_CUBIC)
-    sk_file = open(test_skl,'r')
-    imageToTest = util.scale_and_centre_torso(sk_file,img,boxsize)
-
-    #scale = boxsize/(img.shape[0] * 1.0)
-    #imageToTest = cv.resize(img, (0,0), fx=scale, fy=scale, interpolation=cv.INTER_CUBIC)
-    #imageToTest_padded, pad = util.padRightDownCorner(imageToTest)
-
+    starts['all'].append(time.time())
+    # test_image = path+'/data/rgb_00216.jpg'
+    img = cv.imread(test_image)
+    scale = boxsize/(img.shape[0] * 1.0)
+    imageToTest = cv.resize(img, (0,0), fx=scale, fy=scale, interpolation=cv.INTER_CUBIC)
+    imageToTest_padded, pad = util.padRightDownCorner(imageToTest)
+    # ends['block_1'].append(time.time())
 
     # block 2
-    # person_net.blobs['image'].reshape(*(1, 3, imageToTest_padded.shape[0], imageToTest_padded.shape[1]))
-    # person_net.reshape()
+    # starts['block_2'].append(time.time())
+    person_net.blobs['image'].reshape(*(1, 3, imageToTest_padded.shape[0], imageToTest_padded.shape[1]))
+    person_net.reshape()
     #person_net.forward(); # dry run to avoid GPU synchronization later in caffe
+    # ends['block_2'].append(time.time())
 
     # block 3
-    # person_net.blobs['image'].data[...] = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,2,0,1))/256 - 0.5;
-    # output_blobs = person_net.forward()
-    # person_map = np.squeeze(person_net.blobs[output_blobs.keys()[0]].data)
+    # starts['block_3'].append(time.time())
+    person_net.blobs['image'].data[...] = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,2,0,1))/256 - 0.5;
+    output_blobs = person_net.forward()
+    person_map = np.squeeze(person_net.blobs[output_blobs.keys()[0]].data)
+    # ends['block_3'].append(time.time())
 
     # block 4
-    # person_map_resized = cv.resize(person_map, (0,0), fx=8, fy=8, interpolation=cv.INTER_CUBIC)
-    # data_max = scipy.ndimage.filters.maximum_filter(person_map_resized, 3)
-    # maxima = (person_map_resized == data_max)
-    # diff = (data_max > 0.5)
-    # maxima[diff == 0] = 0
-    # x = np.nonzero(maxima)[1]
-    # y = np.nonzero(maxima)[0]
-    x = [boxsize/2]
-    y = [boxsize/2]
+    # starts['block_4'].append(time.time())
+    person_map_resized = cv.resize(person_map, (0,0), fx=8, fy=8, interpolation=cv.INTER_CUBIC)
+    data_max = scipy.ndimage.filters.maximum_filter(person_map_resized, 3)
+    maxima = (person_map_resized == data_max)
+    diff = (data_max > 0.5)
+    maxima[diff == 0] = 0
+    x = np.nonzero(maxima)[1]
+    y = np.nonzero(maxima)[0]
+    # ends['block_4'].append(time.time())
+
+    # get the right person from openni
+    f1 = open(test_skl,'r')
+    x,y = util.get_correct_person(f1,scale,camera_calib,x,y)
 
     # block 5
-    num_people = 1
+    # starts['block_5'].append(time.time())
+    num_people = len(x)
     person_image = np.ones((model['boxsize'], model['boxsize'], 3, num_people)) * 128
-    person_image[:,:,:,0] = imageToTest
-    # for p in range(num_people):
-    #     x_max = x[p]+model['boxsize']/2
-    #     x_min = x[p]-model['boxsize']/2
-    #     y_max = y[p]+model['boxsize']/2
-    #     y_min = y[p]-model['boxsize']/2
-    #     if x_min < 0:
-    #         xn_min = x_min*-1
-    #         x_min = 0
-    #     else:
-    #         xn_min = 0
-    #     if x_max > imageToTest.shape[1]:
-    #         xn_max = model['boxsize'] - (x_max-imageToTest.shape[1])
-    #         x_max = imageToTest.shape[1]
-    #     else:
-    #         xn_max = model['boxsize']
-    #     if y_min < 0:
-    #         yn_min = y_min*-1
-    #         y_min = 0
-    #     else:
-    #         yn_min = 0
-    #     if y_max > imageToTest.shape[0]:
-    #         yn_max = model['boxsize'] - (y_max-imageToTest.shape[0])
-    #         y_max = imageToTest.shape[0]
-    #     else:
-    #         yn_max = model['boxsize']
-    #     person_image[yn_min:yn_max, xn_min:xn_max, :, p] = imageToTest[y_min:y_max, x_min:x_max, :]
+    for p in range(num_people):
+    	x_max = x[p]+model['boxsize']/2
+    	x_min = x[p]-model['boxsize']/2
+    	y_max = y[p]+model['boxsize']/2
+    	y_min = y[p]-model['boxsize']/2
+    	if x_min < 0:
+    		xn_min = x_min*-1
+    		x_min = 0
+    	else:
+    		xn_min = 0
+    	if x_max > imageToTest.shape[1]:
+    		xn_max = model['boxsize'] - (x_max-imageToTest.shape[1])
+    		x_max = imageToTest.shape[1]
+    	else:
+    		xn_max = model['boxsize']
+    	if y_min < 0:
+    		yn_min = y_min*-1
+    		y_min = 0
+    	else:
+    		yn_min = 0
+    	if y_max > imageToTest.shape[0]:
+    		yn_max = model['boxsize'] - (y_max-imageToTest.shape[0])
+    		y_max = imageToTest.shape[0]
+    	else:
+    		yn_max = model['boxsize']
+    	person_image[yn_min:yn_max, xn_min:xn_max, :, p] = imageToTest[y_min:y_max, x_min:x_max, :]
+    # ends['block_5'].append(time.time())
 
     # block 6
+    # starts['block_6'].append(time.time())
     gaussian_map = np.zeros((model['boxsize'], model['boxsize']))
     x_p = np.arange(model['boxsize'])
     y_p = np.arange(model['boxsize'])
@@ -123,8 +128,10 @@ for test_img,test_skl in zip(rgb_files,skl_files):
     dist_sq = np.transpose(np.matrix(part1))*np.matrix(part2)
     exponent = dist_sq / 2.0 / model['sigma'] / model['sigma']
     gaussian_map = np.exp(-exponent)
+    # ends['block_6'].append(time.time())
 
     # block 7
+    # starts['block_7'].append(time.time())
     #pose_net.forward() # dry run to avoid GPU synchronization later in caffe
     output_blobs_array = [dict() for dummy in range(num_people)]
     for p in range(num_people):
@@ -133,18 +140,22 @@ for test_img,test_skl in zip(rgb_files,skl_files):
         input_4ch[:,:,3] = gaussian_map
         pose_net.blobs['data'].data[...] = np.transpose(np.float32(input_4ch[:,:,:,np.newaxis]), (3,2,0,1))
         if conf == 4:
-            output_blobs_array[p] = copy.deepcopy(pose_net.forward()['Mconv5_stage4'])
+    	 output_blobs_array[p] = copy.deepcopy(pose_net.forward()['Mconv5_stage4'])
         else:
-            output_blobs_array[p] = copy.deepcopy(pose_net.forward()['Mconv7_stage6'])
+    	 output_blobs_array[p] = copy.deepcopy(pose_net.forward()['Mconv7_stage6'])
+    # ends['block_7'].append(time.time())
 
     # block 8
+    # starts['block_8'].append(time.time())
     for p in range(num_people):
         print('Person %d' % p)
         for part in [0,3,7,10,12]: # sample 5 body parts: [head, right elbow, left wrist, right ankle, left knee]
             part_map = output_blobs_array[p][0,part,:,:]
             part_map_resized = cv.resize(part_map, (0,0), fx=4, fy=4, interpolation=cv.INTER_CUBIC) #only for displaying
+    # ends['block_8'].append(time.time())
 
     # block 9
+    # starts['block_9'].append(time.time())
     prediction = np.zeros((14, 2, num_people))
     for p in range(num_people):
         for part in range(14):
@@ -154,12 +165,15 @@ for test_img,test_skl in zip(rgb_files,skl_files):
         # mapped back on full image
         prediction[:,0,p] = prediction[:,0,p] - (model['boxsize']/2) + y[p]
         prediction[:,1,p] = prediction[:,1,p] - (model['boxsize']/2) + x[p]
+    # ends['block_9'].append(time.time())
 
     # block 10
-    colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],[255, 170, 0], [255, 0, 0], [255, 0, 170], [170, 0, 255]] # note BGR ...
-    canvas = imageToTest.copy()
+    # starts['block_10'].append(time.time())
     limbs = model['limbs']
     stickwidth = 6
+    colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
+    [255, 170, 0], [255, 0, 0], [255, 0, 170], [170, 0, 255]] # note BGR ...
+    canvas = imageToTest.copy()
     canvas *= .6 # for transparency
     for p in range(num_people):
         for part in range(model['np']):
@@ -176,9 +190,11 @@ for test_img,test_skl in zip(rgb_files,skl_files):
             cv.fillConvexPoly(cur_canvas, polygon, colors[l])
             #print int(mY),int(mX),int(length/2)
         canvas += cur_canvas * 0.4 # for transparency
+    # ends['block_10'].append(time.time())
     ends['all'].append(time.time())
-    #name = test_img.split('.')[0]
-    util.showBGRimage('~/_results',canvas)
+    name = test_image.split('.')[0]
+    util.showBGRimage('results',canvas)
+    print 'the total time is:',ends['all'][-1] - starts['all'][-1]
 
 for i,j in zip(starts['all'],ends['all']):
     print 'the total time is:',j-i
