@@ -1,3 +1,4 @@
+import rospy
 import numpy as np
 from cStringIO import StringIO
 import PIL.Image
@@ -19,38 +20,43 @@ def read_yaml_calib():
         cx=X["camera_matrix"]["data"][2]
         fy=X["camera_matrix"]["data"][4]
         cy=X["camera_matrix"]["data"][5]
+        rospy.loginfo("reading camera calibration completed.")
     except:
-        print "Could not read yaml file, using default parameters."
+        rospy.loginfo("Could not read camera calibration file, using default parameters.")
         fx=525.0
         fy=525.0
         cx=319.5
         cy=239.5
     return [fx,fy,cx,cy]
 
-def get_correct_person(f1,scale,camera_calib,X,Y):
-
-    [fx,fy,cx,cy] = camera_calib
+def get_openni_values(f1):
     torso_flag = 0
+    openni_values = {}
     for count,line in enumerate(f1):
         # read the joint name
         if (count-1)%11 == 0:
             j = line.split('\n')[0]
-            if j == 'torso':
-                torso_flag = 1
+            openni_values[j] = {}
         # read the x value
         elif (count-1)%11 == 2:
-            if torso_flag:
-                x = float(line.split('\n')[0].split(':')[1])
+            x = float(line.split('\n')[0].split(':')[1])
         # read the y value
         elif (count-1)%11 == 3:
-            if torso_flag:
-                y = float(line.split('\n')[0].split(':')[1])
+            y = float(line.split('\n')[0].split(':')[1])
         # read the z value
         elif (count-1)%11 == 4:
-            if torso_flag:
-                z = float(line.split('\n')[0].split(':')[1])
-            if torso_flag:
-                torso_flag = 0
+            z = float(line.split('\n')[0].split(':')[1])
+            openni_values[j]['x'] = x
+            openni_values[j]['y'] = y
+            openni_values[j]['z'] = z
+    return openni_values
+
+
+def get_correct_person(openni_values,scale,camera_calib,X,Y):
+    [fx,fy,cx,cy] = camera_calib
+    x = openni_values['torso']['x']
+    y = openni_values['torso']['y']
+    z = openni_values['torso']['z']
     #2D data
     x2d = int(int(x*fx/z*1 +cx)*scale);
     y2d = int(int(y*fy/z*1+cy)*scale);
@@ -69,6 +75,7 @@ def get_correct_person(f1,scale,camera_calib,X,Y):
     else:
         x = []; y = []
     return [x,y]
+
 
 
 
@@ -133,10 +140,10 @@ def saveBGRimage(name, a, fmt='jpg'):
     #cv2.waitKey(2000)
     cv2.imwrite(name+'.'+fmt,a)
 
-def showBGRimage(name, a, fmt='jpg'):
+def showBGRimage(name, a, t, fmt='jpg'):
     a = np.uint8(np.clip(a, 0, 255))
     cv2.imshow(name,a)
-    cv2.waitKey(500)
+    cv2.waitKey(t)
     #cv2.imwrite(name+'.'+fmt,a)
 
 def getJetColor(v, vmin, vmax):
