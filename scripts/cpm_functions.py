@@ -13,12 +13,18 @@ import rospkg
 import os
 import glob
 import getpass
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
 
 class skeleton_cpm():
     """docstring for cpm"""
     def __init__(self):
         # read camera calib
         self.camera_calib = util.read_yaml_calib()
+
+        # initialize published
+        self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
+        self.bridge = CvBridge()
 
         # open dataset folder
         self.directory = '/home/'+getpass.getuser()+'/SkeletonDataset/no_consent/'
@@ -70,6 +76,14 @@ class skeleton_cpm():
         else:
             rospy.loginfo(self.cpm_dir+" exists.")
             print self.cpm_dir+" exists."
+
+    def next(self):
+        #print len(self.files)
+        self.userid+=1
+        if self.userid == len(self.files):
+            self.userid = 0
+        self._read_files() 
+
 
     def _process_images(self,test_image,test_depth,test_skl):
         # block 1
@@ -200,17 +214,33 @@ class skeleton_cpm():
         else:
             print 'Person not found, image '+ self.name +' processed in:',time.time() - start_time
         vis = np.concatenate((canvas, depthToTest), axis=1)
-        util.showBGRimage('results',vis,10)
+        #print vis.shape
+        #try:
+        self.image_pub.publish(self.bridge.cv2_to_imgmsg(vis, "bgr8"))
+        #    print 'test'
+            #### Create CompressedIamge ####
+            #msg = CompressedImage()
+            
+            #msg.header.stamp = rospy.Time.now()
+            #msg.format = "jpeg"
+            #msg.data = vis  # np.array(cv.imencode('.jpg', vis)[1]).tostring()
+            # Publish new image
+            #self.image_pub.publish(msg)
+            #print 'image published'
+
+        #except CvBridgeError as e:
+        #    print(e) 
+        #util.showBGRimage('results',vis,10)
 
     def _get_depth_data(self, prediction, depthToTest):
         [fx,fy,cx,cy] = self.camera_calib
         cpm_file = self.cpm_dir + 'cpm_' +self.test_skl.split('/')[-1]
         f1 = open(cpm_file,'w')
 
-
         for part,jname in enumerate(self.limbs_names):
-            x2d = int(prediction[part, 0, 0])
-            y2d = int(prediction[part, 1, 0])
+            x2d = np.min([int(prediction[part, 0, 0]),367])
+            y2d = np.min([int(prediction[part, 1, 0]),490])
+            #print depthToTest.shape,x2d,y2d
             depth_val = depthToTest[x2d, y2d, 0]
             z = (.4)/(80.0-60.0)*(depth_val-60.0) + 2.7
             if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
@@ -219,7 +249,7 @@ class skeleton_cpm():
             x = (y2d/self.scale-cx)*z/fx
             y = (x2d/self.scale-cy)*z/fy
             print x,y,z
-            print self.openni_values[jname]['x'],self.openni_values[jname]['y'],self.openni_values[jname]['z']
-            print '---'
+            f1.write(jname+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
+            #print self.openni_values[jname]['x'],self.openni_values[jname]['y'],self.openni_values[jname]['z']
+            #print '---'
         f1.close()
-

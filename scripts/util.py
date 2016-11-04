@@ -30,25 +30,22 @@ def read_yaml_calib():
     return [fx,fy,cx,cy]
 
 def get_openni_values(f1):
-    torso_flag = 0
     openni_values = {}
     for count,line in enumerate(f1):
-        # read the joint name
-        if (count-1)%11 == 0:
-            j = line.split('\n')[0]
-            openni_values[j] = {}
-        # read the x value
-        elif (count-1)%11 == 2:
-            x = float(line.split('\n')[0].split(':')[1])
-        # read the y value
-        elif (count-1)%11 == 3:
-            y = float(line.split('\n')[0].split(':')[1])
-        # read the z value
-        elif (count-1)%11 == 4:
-            z = float(line.split('\n')[0].split(':')[1])
-            openni_values[j]['x'] = x
-            openni_values[j]['y'] = y
-            openni_values[j]['z'] = z
+        if ':' in line: continue
+        line = line.split(',')
+        openni_values[line[0]] = {}
+        x2d = float(line[1])
+        y2d = float(line[2])
+        x = float(line[3])
+        y = float(line[4])
+        z = float(line[5])
+        c = float(line[6])
+        openni_values[line[0]]['x2d']=x2d
+        openni_values[line[0]]['y2d']=y2d
+        openni_values[line[0]]['x']=x
+        openni_values[line[0]]['y']=y
+        openni_values[line[0]]['z']=z
     return openni_values
 
 
@@ -75,8 +72,6 @@ def get_correct_person(openni_values,scale,camera_calib,X,Y):
     else:
         x = []; y = []
     return [x,y]
-
-
 
 
 def scale_and_centre_torso(f1,img,sz):
