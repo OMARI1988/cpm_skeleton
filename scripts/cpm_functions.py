@@ -17,7 +17,9 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import String, Header
 from mongodb_store.message_store import MessageStoreProxy
-from cpm_skeleton.msg import cpm_pointer
+from cpm_skeleton.msg import cpm_pointer, cpmAction, cpmActionResult
+import sys
+import actionlib
 
 class skeleton_cpm():
     """docstring for cpm"""
@@ -30,19 +32,22 @@ class skeleton_cpm():
         self.bridge = CvBridge()
 
         # mongo shit
-        self.msg_store = MessageStoreProxy(database='message_store', collection='activity_learning_stats')
+        self.msg_store = MessageStoreProxy(database='message_store', collection='cpm_stats')
         
         # open dataset folder
         self.directory = '/home/'+getpass.getuser()+'/SkeletonDataset/no_consent/'
         if not os.path.isdir(self.directory):
-            rospy.loginfo(self.directory+" does not exist.")
+            rospy.loginfo(self.directory+" does not exist. Please make sure there is a dataset on this pc")
+            sys.exit(1)
         self.dates = sorted(os.listdir(self.directory))
-        self.folder = 0
-        self.userid = 0
-        self.frame_num = 1
-        self._read_files()
+        self.get_dates_to_process()
+        if not self.read_mongo_success:
+              self.folder = 0
+              self.userid = 0 
+              self._read_files()
         self.depth_cpm = {}
-
+        #sys.exit(1)
+        
         # cpm init stuff
         self.rospack = rospkg.RosPack()
         self.cpm_path = self.rospack.get_path('cpm_skeleton')
@@ -64,8 +69,31 @@ class skeleton_cpm():
         self.stickwidth = 6
         self.dist_threshold = 1.5   # less than 1.5 meters ignore the skeleton
         self.depth_thresh = .35     # any more different in depth than this with openni, use openni
-
         self.finished_processing = 0   # a flag to indicate that we finished processing allavailable  data
+
+        # action server
+        self._as = actionlib.SimpleActionServer("cpm_action", cpmAction, \
+                    execute_cb=self.execute_cb, auto_start=False)
+        self._as.start()
+
+    def execute_cb(self, goal):
+        start = rospy.Time.now()
+        end = rospy.Time.now()
+        break_flag = 1
+        duration = goal.duration
+        while not self.finished_processing and break_flag:
+            for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
+                if self._as.is_preempt_requested() or (end - start).secs < duration.secs:
+                     break_flag = 0
+                     break
+                self._process_images(rgb, depth, skl)
+                end = rospy.Time.now()
+            if break_flag:
+                self.update_last_learning_date()
+                self.next()
+
+        # after the action reset everything
+        self._as.set_succeeded(recogniseActionResult())
 
     def update_last_learning_date(self):
         msg = cpm_pointer()
@@ -73,12 +101,24 @@ class skeleton_cpm():
         msg.date_ran = time.strftime("%Y-%m-%d")
         msg.last_date_used = self.dates[self.folder]
         msg.uuid = self.files[self.userid]
-        #msg.frame = "1"
         print "adding %s to activity msg store" % msg.uuid
-        #self.msg_store.insert(msg)
         query = {"type" : msg.type}
         self.msg_store.update(message=msg, message_query=query, upsert=True)
 
+    def get_dates_to_process(self):
+        """ Find the sequence of date folders (on disc) which have not been processed into QSRs.
+        ret: self.not_processed_dates - List of date folders to use
+        """
+        self.read_mongo_success = 0
+        for (ret, meta) in self.msg_store.query(cpm_pointer._type):
+            if ret.type != "cpm_skeleton": continue
+            self.read_mongo_success = 1
+            self.folder = self.dates.index(ret.last_date_used)
+            self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
+            self.userid = self.files.index(ret.uuid)
+            rospy.loginfo("cpm progress date: "+ret.last_date_used+","+ret.uuid)
+            self.next()
+        
     def _read_files(self):
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
         self.rgb_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb/'
@@ -89,18 +129,10 @@ class skeleton_cpm():
         self.dpt_files = sorted(glob.glob(self.dpt_dir+"*.jpg"))
         self.skl_files = sorted(glob.glob(self.skl_dir+"*.txt"))
         rospy.loginfo('Processing userid: '+self.files[self.userid])
-
         if not os.path.isdir(self.cpm_dir):
             os.mkdir(self.cpm_dir)
-            #rospy.loginfo(self.cpm_dir+" did not exist, I created it.")
-            #print self.cpm_dir+" did not exist, I created it."
-        #else:
-            #rospy.loginfo(self.cpm_dir+" exists.")
-            #print self.cpm_dir+" exists."
-
+            
     def next(self):
-        self.update_last_learning_date()
-
         self.userid+=1
         if self.userid == len(self.files):
             self.userid = 0
@@ -223,7 +255,6 @@ class skeleton_cpm():
         canvas = imageToTest.copy()
         canvas *= .6 # for transparency
         if num_people:
-            #canvas *= .6 # for transparency
             self._get_depth_data(prediction,depthToTest)
             for p in range(num_people):
                 cur_canvas = np.zeros(canvas.shape,dtype=np.uint8)
@@ -263,11 +294,9 @@ class skeleton_cpm():
         [fx,fy,cx,cy] = self.camera_calib
         cpm_file = self.cpm_dir + 'cpm_' +self.test_skl.split('/')[-1]
         f1 = open(cpm_file,'w')
-
         for part,jname in enumerate(self.limbs_names):
             x2d = np.min([int(prediction[part, 0, 0]),367])
             y2d = np.min([int(prediction[part, 1, 0]),490])
-            #print depthToTest.shape,x2d,y2d
             depth_val = depthToTest[x2d, y2d, 0]
             z = (.4)/(80.0-60.0)*(depth_val-60.0) + 2.7
             if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
@@ -275,8 +304,5 @@ class skeleton_cpm():
             self.depth_cpm[jname] = z
             x = (y2d/self.scale-cx)*z/fx
             y = (x2d/self.scale-cy)*z/fy
-            #print x,y,z
             f1.write(jname+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
-            #print self.openni_values[jname]['x'],self.openni_values[jname]['y'],self.openni_values[jname]['z']
-            #print '---'
         f1.close()
