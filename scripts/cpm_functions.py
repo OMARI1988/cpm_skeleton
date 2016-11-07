@@ -1,8 +1,13 @@
+
+# date    07-11-2016
+# author  Muhannad Alomari
+# email   scmara@leeds.ac.uk
+# version 1.0
+
 import rospy
 import cv2 as cv
 import numpy as np
 import scipy
-#import PIL.Image
 import math
 import caffe
 import time
@@ -20,6 +25,8 @@ from mongodb_store.message_store import MessageStoreProxy
 from cpm_skeleton.msg import cpm_pointer, cpmAction, cpmActionResult
 import sys
 import actionlib
+from activity_data.msg import HumanActivities
+
 
 class skeleton_cpm():
     """docstring for cpm"""
@@ -31,9 +38,10 @@ class skeleton_cpm():
         self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
         self.bridge = CvBridge()
 
-        # mongo shit
+        # mongo stuff
         self.msg_store = MessageStoreProxy(database='message_store', collection='cpm_stats')
-        
+        self.msg_store_learning = MessageStoreProxy(database='message_store', collection='activity_learning')
+
         # open dataset folder
         self.directory = '/home/'+getpass.getuser()+'/SkeletonDataset/no_consent/'
         if not os.path.isdir(self.directory):
@@ -69,7 +77,7 @@ class skeleton_cpm():
                     execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def execute_cb(self, goal):
+    def _initiliase_cpm(self):
         if self.param['use_gpu']:
             caffe.set_mode_gpu()
         else:
@@ -77,25 +85,29 @@ class skeleton_cpm():
         caffe.set_device(self.param['GPUdeviceNumber']) # set to your device!
         self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
         self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
+
+    def execute_cb(self, goal):
+        self._initiliase_cpm()
         start = rospy.Time.now()
         end = rospy.Time.now()
-        break_flag = 1
+        stop_flag = 0
         duration = goal.duration.secs
-        while not self.finished_processing and break_flag:
+        while not self.finished_processing and not stop_flag:
             for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
                 if self._as.is_preempt_requested() or (end - start).secs > duration:
-                     break_flag = 0
+                     stop_flag = 1
                      break
                 self._process_images(rgb, depth, skl)
                 end = rospy.Time.now()
-            if break_flag:
-                self.update_last_learning_date()
+            if not stop_flag:
+                self.update_last_learning()
+                self.update_last_cpm_date()
                 self.next()
 
         # after the action reset everything
         self._as.set_succeeded(cpmActionResult())
 
-    def update_last_learning_date(self):
+    def update_last_cpm_date(self):
         msg = cpm_pointer()
         msg.type = "cpm_skeleton"
         msg.date_ran = time.strftime("%Y-%m-%d")
@@ -104,6 +116,14 @@ class skeleton_cpm():
         print "adding %s to activity msg store" % msg.uuid
         query = {"type" : msg.type}
         self.msg_store.update(message=msg, message_query=query, upsert=True)
+
+    def update_last_learning(self):
+        msg = HumanActivities()
+        msg.date = self.dates[self.folder]
+        msg.uuid = self.files[self.userid].split('_')[-1]
+        msg.cpm = True
+        query = {"uuid" : msg.uuid}
+        self.msg_store_learning.update(message=msg, message_query=query, upsert=True)
 
     def get_dates_to_process(self):
         """ Find the sequence of date folders (on disc) which have not been processed into QSRs.
