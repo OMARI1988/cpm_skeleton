@@ -15,6 +15,9 @@ import glob
 import getpass
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
+from std_msgs.msg import String, Header
+from mongodb_store.message_store import MessageStoreProxy
+from cpm_skeleton.msg import cpm_pointer
 
 class skeleton_cpm():
     """docstring for cpm"""
@@ -26,6 +29,9 @@ class skeleton_cpm():
         self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
         self.bridge = CvBridge()
 
+        # mongo shit
+        self.msg_store = MessageStoreProxy(database='message_store', collection='activity_learning_stats')
+        
         # open dataset folder
         self.directory = '/home/'+getpass.getuser()+'/SkeletonDataset/no_consent/'
         if not os.path.isdir(self.directory):
@@ -59,6 +65,20 @@ class skeleton_cpm():
         self.dist_threshold = 1.5   # less than 1.5 meters ignore the skeleton
         self.depth_thresh = .35     # any more different in depth than this with openni, use openni
 
+        self.finished_processing = 0   # a flag to indicate that we finished processing allavailable  data
+
+    def update_last_learning_date(self):
+        msg = cpm_pointer()
+        msg.type = "cpm_skeleton"
+        msg.date_ran = time.strftime("%Y-%m-%d")
+        msg.last_date_used = self.dates[self.folder]
+        msg.uuid = self.files[self.userid]
+        #msg.frame = "1"
+        print "adding %s to activity msg store" % msg.uuid
+        #self.msg_store.insert(msg)
+        query = {"type" : msg.type}
+        self.msg_store.update(message=msg, message_query=query, upsert=True)
+
     def _read_files(self):
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
         self.rgb_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb/'
@@ -68,21 +88,28 @@ class skeleton_cpm():
         self.rgb_files = sorted(glob.glob(self.rgb_dir+"*.jpg"))
         self.dpt_files = sorted(glob.glob(self.dpt_dir+"*.jpg"))
         self.skl_files = sorted(glob.glob(self.skl_dir+"*.txt"))
+        rospy.loginfo('Processing userid: '+self.files[self.userid])
 
         if not os.path.isdir(self.cpm_dir):
             os.mkdir(self.cpm_dir)
-            rospy.loginfo(self.cpm_dir+" did not exist, I created it.")
-            print self.cpm_dir+" did not exist, I created it."
-        else:
-            rospy.loginfo(self.cpm_dir+" exists.")
-            print self.cpm_dir+" exists."
+            #rospy.loginfo(self.cpm_dir+" did not exist, I created it.")
+            #print self.cpm_dir+" did not exist, I created it."
+        #else:
+            #rospy.loginfo(self.cpm_dir+" exists.")
+            #print self.cpm_dir+" exists."
 
     def next(self):
-        #print len(self.files)
+        self.update_last_learning_date()
+
         self.userid+=1
         if self.userid == len(self.files):
             self.userid = 0
-        self._read_files() 
+            self.folder += 1
+        if self.folder == len(self.dates):
+            rospy.loginfo("cpm finished processing all folders")
+            self.finished_processing = 1
+        else:
+            self._read_files() 
 
 
     def _process_images(self,test_image,test_depth,test_skl):
@@ -194,8 +221,9 @@ class skeleton_cpm():
         # block 10
         limbs = self.model['limbs']
         canvas = imageToTest.copy()
+        canvas *= .6 # for transparency
         if num_people:
-            canvas *= .6 # for transparency
+            #canvas *= .6 # for transparency
             self._get_depth_data(prediction,depthToTest)
             for p in range(num_people):
                 cur_canvas = np.zeros(canvas.shape,dtype=np.uint8)
@@ -214,7 +242,6 @@ class skeleton_cpm():
         else:
             print 'Person not found, image '+ self.name +' processed in:',time.time() - start_time
         vis = np.concatenate((canvas, depthToTest), axis=1)
-        #print vis.shape
         #try:
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(vis, "bgr8"))
         #    print 'test'
@@ -248,7 +275,7 @@ class skeleton_cpm():
             self.depth_cpm[jname] = z
             x = (y2d/self.scale-cx)*z/fx
             y = (x2d/self.scale-cy)*z/fy
-            print x,y,z
+            #print x,y,z
             f1.write(jname+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
             #print self.openni_values[jname]['x'],self.openni_values[jname]['y'],self.openni_values[jname]['z']
             #print '---'
