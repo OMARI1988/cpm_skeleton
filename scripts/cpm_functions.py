@@ -26,7 +26,7 @@ from cpm_skeleton.msg import cpm_pointer, cpmAction, cpmActionResult
 import sys
 import actionlib
 from activity_data.msg import HumanActivities
-
+import shutil
 
 class skeleton_cpm():
     """docstring for cpm"""
@@ -93,19 +93,44 @@ class skeleton_cpm():
         stop_flag = 0
         duration = goal.duration.secs
         while not self.finished_processing and not stop_flag:
+            self.person_found_flag = 0
             for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
                 if self._as.is_preempt_requested() or (end - start).secs > duration:
                      stop_flag = 1
                      break
                 self._process_images(rgb, depth, skl)
                 end = rospy.Time.now()
-            if not stop_flag:
+            if self.person_found_flag and not stop_flag:
                 self.update_last_learning()
                 self.update_last_cpm_date()
                 self.next()
+            elif not self.person_found_flag and not stop_flag:
+                 rospy.loginfo('no person was detected, I will delete this folder!')
+                 self.delete_last_learning()
+                 self.remove_uuid_folder()
+                 self.next()
+                 #sys.exit(1)
 
         # after the action reset everything
         self._as.set_succeeded(cpmActionResult())
+
+    def remove_uuid_folder(self):
+        #print len(self.files)
+        rospy.loginfo('removing: '+self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
+        shutil.rmtree(self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
+        self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
+        #print len(self.files)
+        #sys.exit(1)
+
+    def delete_last_learning(self):
+        uuid = self.files[self.userid].split('_')[-1]
+        query = {"uuid" : uuid}
+        result = self.msg_store_learning.query(type=HumanActivities._type, message_query=query)
+        for (ret,meta) in result:
+            print ret
+            print "I removed id from mongodb!"
+            print ret._id
+            self.msg_store_learning.delete(id=ret._id)
 
     def update_last_cpm_date(self):
         msg = cpm_pointer()
@@ -113,7 +138,7 @@ class skeleton_cpm():
         msg.date_ran = time.strftime("%Y-%m-%d")
         msg.last_date_used = self.dates[self.folder]
         msg.uuid = self.files[self.userid]
-        print "adding %s to activity msg store" % msg.uuid
+        print "adding %s to cpm stats store" % msg.uuid
         query = {"type" : msg.type}
         self.msg_store.update(message=msg, message_query=query, upsert=True)
 
@@ -122,6 +147,7 @@ class skeleton_cpm():
         msg.date = self.dates[self.folder]
         msg.uuid = self.files[self.userid].split('_')[-1]
         msg.cpm = True
+        print "adding %s to activity learning store" % msg.uuid
         query = {"uuid" : msg.uuid}
         self.msg_store_learning.update(message=msg, message_query=query, upsert=True)
 
@@ -154,10 +180,10 @@ class skeleton_cpm():
             
     def next(self):
         self.userid+=1
-        if self.userid == len(self.files):
+        if self.userid >= len(self.files):
             self.userid = 0
             self.folder += 1
-        if self.folder == len(self.dates):
+        if self.folder >= len(self.dates):
             rospy.loginfo("cpm finished processing all folders")
             self.finished_processing = 1
         else:
@@ -274,6 +300,7 @@ class skeleton_cpm():
         canvas = imageToTest.copy()
         canvas *= .6 # for transparency
         if num_people:
+            self.person_found_flag = 1		# this is used to prevent the deletion of the entire folder if noe person is found
             self._get_depth_data(prediction,depthToTest)
             for p in range(num_people):
                 cur_canvas = np.zeros(canvas.shape,dtype=np.uint8)
