@@ -55,13 +55,6 @@ class skeleton_cpm():
         self.param, self.model = config_reader(self.conf)
         self.boxsize = self.model['boxsize']
         self.npart = self.model['np']
-        if self.param['use_gpu']:
-            caffe.set_mode_gpu()
-        else:
-            caffe.set_mode_cpu()
-        caffe.set_device(self.param['GPUdeviceNumber']) # set to your device!
-        self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
-        self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
         self.limbs_names = ['head','neck', 'right_shoulder', 'right_elbow', 'right_hand', 'left_shoulder', 'left_elbow', 'left_hand',
             'right_hip', 'right_knee', 'right_foot', 'left_hip', 'left_knee', 'left_foot']
         self.colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
@@ -77,13 +70,20 @@ class skeleton_cpm():
         self._as.start()
 
     def execute_cb(self, goal):
+        if self.param['use_gpu']:
+            caffe.set_mode_gpu()
+        else:
+            caffe.set_mode_cpu()
+        caffe.set_device(self.param['GPUdeviceNumber']) # set to your device!
+        self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
+        self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
         start = rospy.Time.now()
         end = rospy.Time.now()
         break_flag = 1
-        duration = goal.duration
+        duration = goal.duration.secs
         while not self.finished_processing and break_flag:
             for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
-                if self._as.is_preempt_requested() or (end - start).secs < duration.secs:
+                if self._as.is_preempt_requested() or (end - start).secs > duration:
                      break_flag = 0
                      break
                 self._process_images(rgb, depth, skl)
@@ -93,7 +93,7 @@ class skeleton_cpm():
                 self.next()
 
         # after the action reset everything
-        self._as.set_succeeded(recogniseActionResult())
+        self._as.set_succeeded(cpmActionResult())
 
     def update_last_learning_date(self):
         msg = cpm_pointer()
@@ -143,7 +143,6 @@ class skeleton_cpm():
         else:
             self._read_files() 
 
-
     def _process_images(self,test_image,test_depth,test_skl):
         # block 1
         self.test_skl = test_skl
@@ -155,7 +154,7 @@ class skeleton_cpm():
         imageToTest = cv.resize(img, (0,0), fx=self.scale, fy=self.scale, interpolation=cv.INTER_CUBIC)
         depthToTest = cv.resize(depth, (0,0), fx=self.scale, fy=self.scale, interpolation=cv.INTER_CUBIC)
         imageToTest_padded, pad = util.padRightDownCorner(imageToTest)
-
+        
         # check distance threshold
         f1 = open(self.test_skl,'r')
         self.openni_values = util.get_openni_values(f1)
@@ -166,12 +165,12 @@ class skeleton_cpm():
             self.person_net.blobs['image'].reshape(*(1, 3, imageToTest_padded.shape[0], imageToTest_padded.shape[1]))
             self.person_net.reshape()
             #person_net.forward(); # dry run to avoid GPU synchronization later in caffe
-
+            
             # block 3
             self.person_net.blobs['image'].data[...] = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,2,0,1))/256 - 0.5;
             output_blobs = self.person_net.forward()
             person_map = np.squeeze(self.person_net.blobs[output_blobs.keys()[0]].data)
-
+            
             # block 4
             person_map_resized = cv.resize(person_map, (0,0), fx=8, fy=8, interpolation=cv.INTER_CUBIC)
             data_max = scipy.ndimage.filters.maximum_filter(person_map_resized, 3)
@@ -182,7 +181,7 @@ class skeleton_cpm():
             y = np.nonzero(maxima)[0]
             # get the right person from openni
             x,y = util.get_correct_person(self.openni_values,self.scale,self.camera_calib,x,y)
-
+            
         # block 5
         num_people = len(x)
         person_image = np.ones((self.model['boxsize'], self.model['boxsize'], 3, num_people)) * 128
@@ -209,7 +208,7 @@ class skeleton_cpm():
             else:
                 yn_max = self.model['boxsize']
             person_image[yn_min:yn_max, xn_min:xn_max, :, p] = imageToTest[y_min:y_max, x_min:x_max, :]
-
+        
         # block 6
         gaussian_map = np.zeros((self.model['boxsize'], self.model['boxsize']))
         x_p = np.arange(self.model['boxsize'])
@@ -219,7 +218,7 @@ class skeleton_cpm():
         dist_sq = np.transpose(np.matrix(part1))*np.matrix(part2)
         exponent = dist_sq / 2.0 / self.model['sigma'] / self.model['sigma']
         gaussian_map = np.exp(-exponent)
-
+        
         # block 7
         #pose_net.forward() # dry run to avoid GPU synchronization later in caffe
         output_blobs_array = [dict() for dummy in range(num_people)]
@@ -238,7 +237,7 @@ class skeleton_cpm():
             for part in [0,3,7,10,12]: # sample 5 body parts: [head, right elbow, left wrist, right ankle, left knee]
                 part_map = output_blobs_array[p][0,part,:,:]
                 part_map_resized = cv.resize(part_map, (0,0), fx=4, fy=4, interpolation=cv.INTER_CUBIC) #only for displaying
-
+        
         # block 9
         prediction = np.zeros((14, 2, num_people))
         for p in range(num_people):
@@ -269,26 +268,21 @@ class skeleton_cpm():
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
                 canvas += cur_canvas * 0.4 # for transparency
-            print 'image '+ self.name +' processed in:',time.time() - start_time
+            print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
-            print 'Person not found, image '+ self.name +' processed in:',time.time() - start_time
+            print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"
         vis = np.concatenate((canvas, depthToTest), axis=1)
-        #try:
-        self.image_pub.publish(self.bridge.cv2_to_imgmsg(vis, "bgr8"))
-        #    print 'test'
-            #### Create CompressedIamge ####
-            #msg = CompressedImage()
-            
-            #msg.header.stamp = rospy.Time.now()
-            #msg.format = "jpeg"
-            #msg.data = vis  # np.array(cv.imencode('.jpg', vis)[1]).tostring()
-            # Publish new image
-            #self.image_pub.publish(msg)
-            #print 'image published'
-
-        #except CvBridgeError as e:
-        #    print(e) 
-        #util.showBGRimage('results',vis,10)
+        sys.stdout = open(os.devnull, "w")
+        msg = self.bridge.cv2_to_imgmsg(vis, "bgr8")
+        sys.stdout = sys.__stdout__
+        self.image_pub.publish(msg)
+        #### Create CompressedIamge ####
+        #msg = CompressedImage()    
+        #msg.header.stamp = rospy.Time.now()
+        #msg.format = "jpeg"
+        #msg.data = vis  # np.array(cv.imencode('.jpg', vis)[1]).tostring()
+        #### Publish new image
+        #self.image_pub.publish(msg)
 
     def _get_depth_data(self, prediction, depthToTest):
         [fx,fy,cx,cy] = self.camera_calib
