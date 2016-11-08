@@ -38,8 +38,8 @@ class skeleton_cpm():
         # remove rgb images
         self.rgb_remove = rem
         if self.rgb_remove:
-            rospy.loginfo("remove rgb images from the dataset!") 
-        
+            rospy.loginfo("remove rgb images from the dataset.") 
+
         # initialize published
         self.pub = pub
         if self.pub:
@@ -70,7 +70,7 @@ class skeleton_cpm():
         # cpm init stuff
         self.rospack = rospkg.RosPack()
         self.cpm_path = self.rospack.get_path('cpm_skeleton')
-        self.conf = 1            # using config file 1, for the full body detector
+        self.conf = 1            	# using config file 1, for the full body detector
         self.param, self.model = config_reader(self.conf)
         self.boxsize = self.model['boxsize']
         self.npart = self.model['np']
@@ -79,9 +79,10 @@ class skeleton_cpm():
         self.colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
         [255, 170, 0], [255, 0, 0], [255, 0, 170], [170, 0, 255]] # note BGR ...
         self.stickwidth = 6
-        self.dist_threshold = 1.5   # less than 1.5 meters ignore the skeleton
-        self.depth_thresh = .35     # any more different in depth than this with openni, use openni
-        self.finished_processing = 0   # a flag to indicate that we finished processing allavailable  data
+        self.dist_threshold = 1.5   	# less than 1.5 meters ignore the skeleton
+        self.depth_thresh = .35     	# any more different in depth than this with openni, use openni
+        self.finished_processing = 0   	# a flag to indicate that we finished processing allavailable  data
+        self.threshold = 10		# remove any folder <= 10 detections
 
         # action server
         self._as = actionlib.SimpleActionServer("cpm_action", cpmAction, \
@@ -111,15 +112,16 @@ class skeleton_cpm():
                      break
                 self._process_images(rgb, depth, skl)
                 end = rospy.Time.now()
-            if self.person_found_flag and not stop_flag:
-                self.update_last_learning()
-                self.update_last_cpm_date()
-                self.next()
-            elif not self.person_found_flag and not stop_flag:
-                 rospy.loginfo('no person was detected, I will delete this folder!')
-                 self.delete_last_learning()
-                 self.remove_uuid_folder()
-                 self.next()
+            if not stop_flag:
+                if self.person_found_flag > self.threshold:
+                    self.update_last_learning()
+                    self.update_last_cpm_date()
+                    self.next()
+                else:
+                    rospy.loginfo('nothing interesting was detected, I will delete this folder!')
+                    self.delete_last_learning()
+                    self.remove_uuid_folder()
+                    self.next()
                  
         # after the action reset everything
         self._as.set_succeeded(cpmActionResult())
@@ -136,11 +138,9 @@ class skeleton_cpm():
         uuid = self.files[self.userid].split('_')[-1]
         query = {"uuid" : uuid}
         result = self.msg_store_learning.query(type=HumanActivities._type, message_query=query)
+        rospy.loginfo("I removed id from mongodb: "+uuid)
         for (ret,meta) in result:
-            print ret
-            print "I removed id from mongodb!"
-            print ret._id
-            self.msg_store_learning.delete(id=ret._id)
+            self.msg_store_learning.delete(message_id=str(meta['_id']))
 
     def update_last_cpm_date(self):
         msg = cpm_pointer()
@@ -311,7 +311,7 @@ class skeleton_cpm():
         canvas = imageToTest.copy()
         canvas *= .6 # for transparency
         if num_people:
-            self.person_found_flag = 1		# this is used to prevent the deletion of the entire folder if noe person is found
+            self.person_found_flag += 1		# this is used to prevent the deletion of the entire folder if noe person is found
             self._get_depth_data(prediction,depthToTest)
             for p in range(num_people):
                 cur_canvas = np.zeros(canvas.shape,dtype=np.uint8)
