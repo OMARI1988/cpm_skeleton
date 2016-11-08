@@ -107,6 +107,7 @@ class skeleton_cpm():
         f1.write(', duration='+ str(duration))
         f1.write(', processed='+str(self.processed))
         f1.write(', removed='+str(self.removed))
+        f1.write(', images='+str(self.img_processed))
         if self.finished_processing:
             f1.write(', stopped=finisehd all data\n')
         elif stop_flag_pre:
@@ -115,12 +116,12 @@ class skeleton_cpm():
             f1.write(', stopped=duration\n')
 
     def execute_cb(self, goal):
-        self.processed = 0; self.removed = 0			# stats counter
+        self.processed = 0; self.removed = 0; self.img_processed = 0	# stats counter
         self._initiliase_cpm()
         stats_start = time.strftime("%d-%b-%Y %H:%M:%S")
         start = rospy.Time.now()
         end = rospy.Time.now()
-        stop_flag_pre = 0; stop_flag_dur = 0			# stop flags preempt and duration
+        stop_flag_pre = 0; stop_flag_dur = 0				# stop flags preempt and duration
         duration = goal.duration.secs
         while not self.finished_processing and not stop_flag_pre and not stop_flag_dur:
             self.person_found_flag = 0
@@ -131,6 +132,7 @@ class skeleton_cpm():
                      stop_flag_dur=1; break
                 self._process_images(rgb, depth, skl)
                 end = rospy.Time.now()
+                self.img_processed+=1				# counts the number of processed images
             if not stop_flag_pre and not stop_flag_dur:
                 self.processed+=1				# stats counter
                 if self.person_found_flag > self.threshold:
