@@ -1,0 +1,18 @@
+<launch>
+
+  <arg name="remove_rgb" default="False"/>
+  <arg name="publish_images" default="True"/>
+  <arg name="camera_calibration" default="~/.ros/camera_info/rgb_PS1080_PrimeSense.yaml" />
+
+  <arg name="machine" default="localhost"/>
+  <arg name="user" default=""/>
+
+  <machine name="$(arg machine)" address="$(arg machine)" env-loader="$(optenv ROS_ENV_LOADER )" user="$(arg user)" default="true"/>
+
+  <node pkg="cpm_skeleton" type="cpm_robot_data.py" name="cpm_robot_data" respawn="true" output="screen">
+  	<param name="remove_rgb" value="$(arg remove_rgb)" type="bool"/>
+  	<param name="publish_images" value="$(arg publish_images)" type="bool"/>
+        <param name="camera_calibration" value="$(arg camera_calibration)" type="string"/>
+  </node>
+
+</launch>

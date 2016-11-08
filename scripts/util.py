@@ -5,6 +5,7 @@ import PIL.Image
 from IPython.display import Image, display
 import cv2
 import getpass
+import sys
 
 def make_X(x,z,fx,fy,cx,cy):
     return int(x*fx/z +cx)
@@ -12,9 +13,9 @@ def make_X(x,z,fx,fy,cx,cy):
 def make_Y(y,z,fx,fy,cx,cy):
     return int(y*(-fy)/z+ cy)
 
-def read_yaml_calib():
+def read_yaml_calib(dir1):
     try:
-        f= open('~/.ros/rgb_PS1080_PrimeSense.yaml','r')
+        f= open(dir1,'r')
         X=yaml.load(f)
         fx=X["camera_matrix"]["data"][0]
         cx=X["camera_matrix"]["data"][2]

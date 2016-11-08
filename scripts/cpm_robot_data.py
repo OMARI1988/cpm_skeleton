@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# license removed for brevity
+
 import rospy
 import cpm_functions
 import sys
@@ -7,6 +7,14 @@ import sys
 # to run on bob for testing
 # rosrun actionlib axclient.py /cpm_action
 
-rospy.init_node('cpm_skeleton', anonymous=True)
-sk_cpm = cpm_functions.skeleton_cpm()
-rospy.spin()
+if __name__== "__main__":
+
+    rospy.init_node('cpm_skeleton', anonymous=True)
+    if len(sys.argv) < 3:
+        print("usage: cpm_robot_data.py takes three arguments")
+    else:
+        rem = rospy.get_param("~remove_rgb","")
+        cam = rospy.get_param("~camera_calibration","")
+        pub = rospy.get_param("~publish_images","")
+        sk_cpm = cpm_functions.skeleton_cpm(cam,rem,pub)
+        rospy.spin()

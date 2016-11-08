@@ -30,13 +30,24 @@ import shutil
 
 class skeleton_cpm():
     """docstring for cpm"""
-    def __init__(self):
+    def __init__(self,cam,rem,pub):
+        
         # read camera calib
-        self.camera_calib = util.read_yaml_calib()
+        self.camera_calib = util.read_yaml_calib(cam)
 
+        # remove rgb images
+        self.rgb_remove = rem
+        if self.rgb_remove:
+            rospy.loginfo("remove rgb images from the dataset!") 
+        
         # initialize published
-        self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
-        self.bridge = CvBridge()
+        self.pub = pub
+        if self.pub:
+            rospy.loginfo("publishing cpm images")
+            self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
+            self.bridge = CvBridge()
+        else:
+            rospy.loginfo("not publishing cpm images")
 
         # mongo stuff
         self.msg_store = MessageStoreProxy(database='message_store', collection='cpm_stats')
@@ -109,8 +120,7 @@ class skeleton_cpm():
                  self.delete_last_learning()
                  self.remove_uuid_folder()
                  self.next()
-                 #sys.exit(1)
-
+                 
         # after the action reset everything
         self._as.set_succeeded(cpmActionResult())
 
@@ -146,6 +156,7 @@ class skeleton_cpm():
         msg = HumanActivities()
         msg.date = self.dates[self.folder]
         msg.uuid = self.files[self.userid].split('_')[-1]
+        msg.time = self.files[self.userid].split('_')[-2]
         msg.cpm = True
         print "adding %s to activity learning store" % msg.uuid
         query = {"uuid" : msg.uuid}
@@ -318,18 +329,20 @@ class skeleton_cpm():
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"
-        vis = np.concatenate((canvas, depthToTest), axis=1)
-        sys.stdout = open(os.devnull, "w")
-        msg = self.bridge.cv2_to_imgmsg(vis, "bgr8")
-        sys.stdout = sys.__stdout__
-        self.image_pub.publish(msg)
-        #### Create CompressedIamge ####
-        #msg = CompressedImage()    
-        #msg.header.stamp = rospy.Time.now()
-        #msg.format = "jpeg"
-        #msg.data = vis  # np.array(cv.imencode('.jpg', vis)[1]).tostring()
-        #### Publish new image
-        #self.image_pub.publish(msg)
+        
+        if self.pub:
+            vis = np.concatenate((canvas, depthToTest), axis=1)
+            sys.stdout = open(os.devnull, "w")
+            msg = self.bridge.cv2_to_imgmsg(vis, "bgr8")
+            sys.stdout = sys.__stdout__
+            self.image_pub.publish(msg)
+            #### Create CompressedIamge ####
+            #msg = CompressedImage()    
+            #msg.header.stamp = rospy.Time.now()
+            #msg.format = "jpeg"
+            #msg.data = vis  # np.array(cv.imencode('.jpg', vis)[1]).tostring()
+            #### Publish new image
+            #self.image_pub.publish(msg)
 
     def _get_depth_data(self, prediction, depthToTest):
         [fx,fy,cx,cy] = self.camera_calib
@@ -339,7 +352,7 @@ class skeleton_cpm():
             x2d = np.min([int(prediction[part, 0, 0]),367])
             y2d = np.min([int(prediction[part, 1, 0]),490])
             depth_val = depthToTest[x2d, y2d, 0]
-            z = (.4)/(80.0-60.0)*(depth_val-60.0) + 2.7
+            z = (.4)/(20.0)*(depth_val-60.0) + 2.7
             if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
                 z = self.openni_values[jname]['z']
             self.depth_cpm[jname] = z
