@@ -83,6 +83,7 @@ class skeleton_cpm():
         self.depth_thresh = .35     	# any more different in depth than this with openni, use openni
         self.finished_processing = 0   	# a flag to indicate that we finished processing allavailable  data
         self.threshold = 10		# remove any folder <= 10 detections
+        self.cpm_stats_file = '/home/'+getpass.getuser()+'/SkeletonDataset/cpm_stats.txt'
 
         # action server
         self._as = actionlib.SimpleActionServer("cpm_action", cpmAction, \
@@ -98,32 +99,53 @@ class skeleton_cpm():
         self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
         self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
 
+    def _cpm_stats(self, start, duration, stop_flag_pre, stop_flag_dur):
+        f1 = open(self.cpm_stats_file,'a')
+        f1.write('date='+start.split(' ')[0])
+        f1.write(', start='+start.split(' ')[1])
+        f1.write(', end='+time.strftime("%H:%M:%S"))
+        f1.write(', duration='+ str(duration))
+        f1.write(', processed='+str(self.processed))
+        f1.write(', removed='+str(self.removed))
+        if self.finished_processing:
+            f1.write(', stopped=finisehd all data\n')
+        elif stop_flag_pre:
+            f1.write(', stopped=preempted\n')
+        elif stop_flag_dur:
+            f1.write(', stopped=duration\n')
+
     def execute_cb(self, goal):
+        self.processed = 0; self.removed = 0			# stats counter
         self._initiliase_cpm()
+        stats_start = time.strftime("%d-%b-%Y %H:%M:%S")
         start = rospy.Time.now()
         end = rospy.Time.now()
-        stop_flag = 0
+        stop_flag_pre = 0; stop_flag_dur = 0			# stop flags preempt and duration
         duration = goal.duration.secs
-        while not self.finished_processing and not stop_flag:
+        while not self.finished_processing and not stop_flag_pre and not stop_flag_dur:
             self.person_found_flag = 0
             for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
-                if self._as.is_preempt_requested() or (end - start).secs > duration:
-                     stop_flag = 1
-                     break
+                if self._as.is_preempt_requested():
+                     stop_flag_pre=1; break
+                if (end - start).secs > duration:
+                     stop_flag_dur=1; break
                 self._process_images(rgb, depth, skl)
                 end = rospy.Time.now()
-            if not stop_flag:
+            if not stop_flag_pre and not stop_flag_dur:
+                self.processed+=1				# stats counter
                 if self.person_found_flag > self.threshold:
                     self.update_last_learning()
                     self.update_last_cpm_date()
                     self.next()
+                    self.removed+=1				# stats counter
                 else:
                     rospy.loginfo('nothing interesting was detected, I will delete this folder!')
                     self.delete_last_learning()
                     self.remove_uuid_folder()
                     self.next()
-                 
+                         
         # after the action reset everything
+        self._cpm_stats(stats_start, duration, stop_flag_pre, stop_flag_dur)
         self._as.set_succeeded(cpmActionResult())
 
     def remove_uuid_folder(self):
@@ -336,6 +358,7 @@ class skeleton_cpm():
             msg = self.bridge.cv2_to_imgmsg(vis, "bgr8")
             sys.stdout = sys.__stdout__
             self.image_pub.publish(msg)
+            #cv.imwrite('/home/strands/SkeletonDataset/cpm_images/cpm_'+self.name+'.jpg',vis)
             #### Create CompressedIamge ####
             #msg = CompressedImage()    
             #msg.header.stamp = rospy.Time.now()
