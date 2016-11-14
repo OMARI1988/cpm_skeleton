@@ -64,7 +64,6 @@ class skeleton_cpm():
               self.folder = 0
               self.userid = 0 
               self._read_files()
-        self.depth_cpm = {}
         #sys.exit(1)
         
         # cpm init stuff
@@ -262,6 +261,7 @@ class skeleton_cpm():
             y = np.nonzero(maxima)[0]
             # get the right person from openni
             x,y = util.get_correct_person(self.openni_values,self.scale,self.camera_calib,x,y)
+            self.x = x; self.y = y
             
         # block 5
         num_people = len(x)
@@ -349,6 +349,7 @@ class skeleton_cpm():
                     polygon = cv.ellipse2Poly((int(mY),int(mX)), (int(length/2), self.stickwidth), int(angle), 0, 360, 1)
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
+                cv.circle(cur_canvas,(int(self.x[0]),int(self.y[0])), 3, (250,0,210), -1)
                 canvas += cur_canvas * 0.4 # for transparency
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
@@ -380,8 +381,17 @@ class skeleton_cpm():
             z = (.4)/(20.0)*(depth_val-60.0) + 2.7
             if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
                 z = self.openni_values[jname]['z']
-            self.depth_cpm[jname] = z
             x = (y2d/self.scale-cx)*z/fx
             y = (x2d/self.scale-cy)*z/fy
             f1.write(jname+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
+        # add the torso position
+        x2d = np.min([int(self.y[0]),367])
+        y2d = np.min([int(self.x[0]),490])     
+        depth_val = depthToTest[x2d, y2d, 0]
+        z = (.4)/(20.0)*(depth_val-60.0) + 2.7
+        if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
+            z = self.openni_values[jname]['z']   
+        x = (y2d/self.scale-cx)*z/fx
+        y = (x2d/self.scale-cy)*z/fy
+        f1.write('torso'+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
         f1.close()
