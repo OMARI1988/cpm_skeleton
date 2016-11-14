@@ -137,6 +137,7 @@ class skeleton_cpm():
                 if self.person_found_flag > self.threshold:
                     self.update_last_learning()
                     self.update_last_cpm_date()
+                    if self.rgb_remove:    self._remove_rgb_images()	# remove rgb images from directory
                     self.next()
                     self.removed+=1				# stats counter
                 else:
@@ -149,6 +150,10 @@ class skeleton_cpm():
         self._cpm_stats(stats_start, duration, stop_flag_pre, stop_flag_dur)
         self._as.set_succeeded(cpmActionResult())
 
+    def _remove_rgb_images(self):
+        rospy.loginfo('removing: '+self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb')
+        shutil.rmtree(self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb')
+        
     def remove_uuid_folder(self):
         #print len(self.files)
         rospy.loginfo('removing: '+self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
