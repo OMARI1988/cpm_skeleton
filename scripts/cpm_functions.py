@@ -30,7 +30,7 @@ import shutil
 
 class skeleton_cpm():
     """docstring for cpm"""
-    def __init__(self,cam,rem,pub):
+    def __init__(self,cam,rem,pub,sav):
         
         # read camera calib
         self.camera_calib = util.read_yaml_calib(cam)
@@ -40,14 +40,19 @@ class skeleton_cpm():
         if self.rgb_remove:
             rospy.loginfo("remove rgb images from the dataset.") 
 
+        # save cpm images
+        self.save_cpm_img = sav
+        if self.save_cpm_img:
+            rospy.loginfo("save cpm images.") 
+
         # initialize published
         self.pub = pub
         if self.pub:
-            rospy.loginfo("publishing cpm images")
+            rospy.loginfo("publish cpm images")
             self.image_pub = rospy.Publisher("/cpm_skeleton_image", Image, queue_size=1)
             self.bridge = CvBridge()
         else:
-            rospy.loginfo("not publishing cpm images")
+            rospy.loginfo("don't publish cpm images")
 
         # mongo stuff
         self.msg_store = MessageStoreProxy(database='message_store', collection='cpm_stats')
@@ -138,12 +143,12 @@ class skeleton_cpm():
                     self.update_last_learning()
                     self.update_last_cpm_date()
                     if self.rgb_remove:    self._remove_rgb_images()	# remove rgb images from directory
-                    self.next()
-                    self.removed+=1				# stats counter
+                    self.next()				# stats counter
                 else:
                     rospy.loginfo('nothing interesting was detected, I will delete this folder!')
                     self.delete_last_learning()
                     self.remove_uuid_folder()
+                    self.removed+=1
                     self.next()
                          
         # after the action reset everything
@@ -210,12 +215,16 @@ class skeleton_cpm():
         self.dpt_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/depth/'
         self.skl_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/skeleton/'
         self.cpm_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_skeleton/'
+        self.cpm_img_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_images/'
         self.rgb_files = sorted(glob.glob(self.rgb_dir+"*.jpg"))
         self.dpt_files = sorted(glob.glob(self.dpt_dir+"*.jpg"))
         self.skl_files = sorted(glob.glob(self.skl_dir+"*.txt"))
         rospy.loginfo('Processing userid: '+self.files[self.userid])
         if not os.path.isdir(self.cpm_dir):
             os.mkdir(self.cpm_dir)
+
+        if not os.path.isdir(self.cpm_img_dir) and self.save_cpm_img:
+            os.mkdir(self.cpm_img_dir)
             
     def next(self):
         self.userid+=1
@@ -338,7 +347,7 @@ class skeleton_cpm():
         # block 10
         limbs = self.model['limbs']
         canvas = imageToTest.copy()
-        canvas *= .6 # for transparency
+        canvas *= .5 # for transparency
         if num_people:
             self.person_found_flag += 1		# this is used to prevent the deletion of the entire folder if noe person is found
             self._get_depth_data(prediction,depthToTest)
@@ -355,13 +364,17 @@ class skeleton_cpm():
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
                 cv.circle(cur_canvas,(int(self.x[0]),int(self.y[0])), 3, (250,0,210), -1)
-                canvas += cur_canvas * 0.4 # for transparency
+                canvas += cur_canvas * 0.5 # for transparency
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"
-        
+        vis = np.concatenate((canvas, depthToTest), axis=1)
+        # saving cpm images
+        if self.save_cpm_img:
+            cv.imwrite(self.cpm_img_dir+self.name+'.jpg',vis)
+            
+        # publishing cpm images
         if self.pub:
-            vis = np.concatenate((canvas, depthToTest), axis=1)
             sys.stdout = open(os.devnull, "w")
             msg = self.bridge.cv2_to_imgmsg(vis, "bgr8")
             sys.stdout = sys.__stdout__
