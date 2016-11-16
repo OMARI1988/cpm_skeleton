@@ -251,7 +251,7 @@ class skeleton_cpm():
         
         # check distance threshold
         f1 = open(self.test_skl,'r')
-        self.openni_values = util.get_openni_values(f1)
+        self.openni_values, self.openni_time = util.get_openni_values(f1)
         x = []
         y = []
         if self.openni_values['torso']['z'] >= self.dist_threshold:
@@ -392,6 +392,7 @@ class skeleton_cpm():
         [fx,fy,cx,cy] = self.camera_calib
         cpm_file = self.cpm_dir + 'cpm_' +self.test_skl.split('/')[-1]
         f1 = open(cpm_file,'w')
+        f1.write(self.openni_time)
         for part,jname in enumerate(self.limbs_names):
             x2d = np.min([int(prediction[part, 0, 0]),367])
             y2d = np.min([int(prediction[part, 1, 0]),490])

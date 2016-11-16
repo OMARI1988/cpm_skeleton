@@ -32,8 +32,11 @@ def read_yaml_calib(dir1):
 
 def get_openni_values(f1):
     openni_values = {}
+    time = 'time:'
     for count,line in enumerate(f1):
-        if ':' in line: continue
+        if ':' in line: 
+            time=line
+            continue
         line = line.split(',')
         openni_values[line[0]] = {}
         x2d = float(line[1])
@@ -47,7 +50,7 @@ def get_openni_values(f1):
         openni_values[line[0]]['x']=x
         openni_values[line[0]]['y']=y
         openni_values[line[0]]['z']=z
-    return openni_values
+    return openni_values,time
 
 
 def get_correct_person(openni_values,scale,camera_calib,X,Y):
