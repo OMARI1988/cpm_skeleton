@@ -365,12 +365,11 @@ class skeleton_cpm():
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
                 cv.circle(cur_canvas,(int(self.x[0]),int(self.y[0])), 3, (250,0,210), -1)
-                #canvas += cur_canvas * 0.5 # for transparency
-                canvas = np.add(canvas,np.multiply(cur_canvas,0.5,casting="unsafe"),casting="unsafe").astype(np.uint8) # for transparency
+                canvas = np.add(canvas,np.multiply(cur_canvas,0.5,casting="unsafe"),casting="unsafe") # for transparency
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"
-        vis = np.concatenate((canvas, depthToTest), axis=1)
+        vis = np.concatenate((canvas.astype(np.uint8), depthToTest), axis=1)
         # saving cpm images
         if self.save_cpm_img:
             cv.imwrite(self.cpm_img_dir+self.name+'.jpg',vis)
