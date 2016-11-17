@@ -347,7 +347,8 @@ class skeleton_cpm():
         # block 10
         limbs = self.model['limbs']
         canvas = imageToTest.copy()
-        canvas *= .5 # for transparency
+        #canvas *= .5 # for transparency
+        canvas = np.multiply(canvas,0.5,casting="unsafe")
         if num_people:
             self.person_found_flag += 1		# this is used to prevent the deletion of the entire folder if noe person is found
             self._get_depth_data(prediction,depthToTest)
@@ -364,7 +365,8 @@ class skeleton_cpm():
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
                 cv.circle(cur_canvas,(int(self.x[0]),int(self.y[0])), 3, (250,0,210), -1)
-                canvas += cur_canvas * 0.5 # for transparency
+                #canvas += cur_canvas * 0.5 # for transparency
+                canvas = np.add(canvas,np.multiply(cur_canvas,0.5,casting="unsafe"),casting="unsafe").astype(np.uint8) # for transparency
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"

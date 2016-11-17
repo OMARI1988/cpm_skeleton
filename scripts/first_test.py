@@ -160,7 +160,8 @@ stickwidth = 6
 colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
 [255, 170, 0], [255, 0, 0], [255, 0, 170], [170, 0, 255]] # note BGR ...
 canvas = imageToTest.copy()
-canvas *= .6 # for transparency
+canvas = np.multiply(canvas,0.6,casting="unsafe")
+#canvas *= .6 # for transparency
 for p in range(num_people):
     for part in range(model['np']):
 	cv.circle(canvas, (int(prediction[part, 1, p]), int(prediction[part, 0, p])), 3, (0, 0, 0), -1)
@@ -175,7 +176,7 @@ for p in range(num_people):
 	polygon = cv.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
 	cv.fillConvexPoly(cur_canvas, polygon, colors[l])
         #print int(mY),int(mX),int(length/2)
-    canvas += cur_canvas * 0.4 # for transparency
+    canvas = np.add(canvas,np.multiply(cur_canvas,0.4,casting="unsafe"),casting="unsafe") # for transparency
 ends['block_10'].append(time.time())
 ends['all'].append(time.time())
 name = test_image.split('.')[0]
