@@ -165,6 +165,7 @@ class skeleton_cpm():
         rospy.loginfo('removing: '+self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
         shutil.rmtree(self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
+        self.userid-=1
         #print len(self.files)
         #sys.exit(1)
 
