@@ -33,6 +33,7 @@ class skeleton_cpm():
     def __init__(self,cam,rem,pub,sav):
         
         # read camera calib
+        #print '>>>>>>>>>',cam
         self.camera_calib = util.read_yaml_calib(cam)
 
         # remove rgb images
