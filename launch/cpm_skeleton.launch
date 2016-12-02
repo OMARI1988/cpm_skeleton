@@ -2,7 +2,7 @@
 
   <arg name="remove_rgb" default="False"/>
   <arg name="publish_images" default="True"/>
-  <arg name="camera_calibration" default="~/.ros/camera_info/rgb_PS1080_PrimeSense.yaml" />
+  <arg name="camera_calibration" default="/home/strands/.ros/camera_info/rgb_PS1080_PrimeSense.yaml" />
   <arg name="save_images" default="False"/>
 
   <arg name="machine" default="localhost"/>
