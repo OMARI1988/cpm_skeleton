@@ -97,6 +97,7 @@ class skeleton_cpm():
         self._as.start()
 
     def _initiliase_cpm(self):
+        sys.stdout = open(os.devnull,"w")
         if self.param['use_gpu']:
             caffe.set_mode_gpu()
         else:
@@ -104,6 +105,7 @@ class skeleton_cpm():
         caffe.set_device(self.param['GPUdeviceNumber']) # set to your device!
         self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
         self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
+        sys.stdout = sys.__stdout__
 
     def _cpm_stats(self, start, duration, stop_flag_pre, stop_flag_dur):
         f1 = open(self.cpm_stats_file,'a')
@@ -122,6 +124,7 @@ class skeleton_cpm():
             f1.write(', stopped=duration\n')
 
     def execute_cb(self, goal):
+        #print '>>-',self.empty_date
         self.processed = 0; self.removed = 0; self.img_processed = 0	# stats counter
         self._initiliase_cpm()
         stats_start = time.strftime("%d-%b-%Y %H:%M:%S")
@@ -130,7 +133,8 @@ class skeleton_cpm():
         stop_flag_pre = 0; stop_flag_dur = 0				# stop flags preempt and duration
         duration = goal.duration.secs
         while not self.finished_processing and not stop_flag_pre and not stop_flag_dur:
-            if self.empty_date:
+            #print self.empty_date
+            if self.empty_date or self.rgb_files==[]:
                 rospy.loginfo("found an empty date folder")
                 self.next()
             else:
@@ -218,6 +222,7 @@ class skeleton_cpm():
         
     def _read_files(self):
         self.empty_date = 0
+        self.rgb_files = []
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
         if self.files != []:		# empty folders
            #print ">", self.folder
@@ -253,6 +258,9 @@ class skeleton_cpm():
             self.finished_processing = 1
         else:
             self._read_files() 
+        #print '>>',self.userid
+        #print '>>',self.folder
+        #print '>>> test',self.empty_date
 
     def _process_images(self,test_image,test_depth,test_skl):
         # block 1
