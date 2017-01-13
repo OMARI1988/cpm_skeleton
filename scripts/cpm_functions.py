@@ -33,6 +33,7 @@ class skeleton_cpm():
     def __init__(self,cam,rem,pub,sav):
         
         # read camera calib
+        #print '>>>>>>>>>',cam
         self.camera_calib = util.read_yaml_calib(cam)
 
         # remove rgb images
@@ -64,12 +65,13 @@ class skeleton_cpm():
             rospy.loginfo(self.directory+" does not exist. Please make sure there is a dataset on this pc")
             sys.exit(1)
         self.dates = sorted(os.listdir(self.directory))
+        #self.delete_empty_dates()
         self.get_dates_to_process()
+        self.empty_date = 0		# just a flag for empty date folder
         if not self.read_mongo_success:
               self.folder = 0
               self.userid = 0 
               self._read_files()
-        #sys.exit(1)
         
         # cpm init stuff
         self.rospack = rospkg.RosPack()
@@ -95,6 +97,7 @@ class skeleton_cpm():
         self._as.start()
 
     def _initiliase_cpm(self):
+        sys.stdout = open(os.devnull,"w")
         if self.param['use_gpu']:
             caffe.set_mode_gpu()
         else:
@@ -102,6 +105,7 @@ class skeleton_cpm():
         caffe.set_device(self.param['GPUdeviceNumber']) # set to your device!
         self.person_net = caffe.Net(self.model['deployFile_person'], self.model['caffemodel_person'], caffe.TEST)
         self.pose_net = caffe.Net(self.model['deployFile'], self.model['caffemodel'], caffe.TEST)
+        sys.stdout = sys.__stdout__
 
     def _cpm_stats(self, start, duration, stop_flag_pre, stop_flag_dur):
         f1 = open(self.cpm_stats_file,'a')
@@ -120,6 +124,7 @@ class skeleton_cpm():
             f1.write(', stopped=duration\n')
 
     def execute_cb(self, goal):
+        #print '>>-',self.empty_date
         self.processed = 0; self.removed = 0; self.img_processed = 0	# stats counter
         self._initiliase_cpm()
         stats_start = time.strftime("%d-%b-%Y %H:%M:%S")
@@ -128,28 +133,33 @@ class skeleton_cpm():
         stop_flag_pre = 0; stop_flag_dur = 0				# stop flags preempt and duration
         duration = goal.duration.secs
         while not self.finished_processing and not stop_flag_pre and not stop_flag_dur:
-            self.person_found_flag = 0
-            for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
-                if self._as.is_preempt_requested():
-                     stop_flag_pre=1; break
-                if (end - start).secs > duration:
-                     stop_flag_dur=1; break
-                self._process_images(rgb, depth, skl)
-                end = rospy.Time.now()
-                self.img_processed+=1				# counts the number of processed images
-            if not stop_flag_pre and not stop_flag_dur:
-                self.processed+=1				# stats counter
-                if self.person_found_flag > self.threshold:
-                    self.update_last_learning()
-                    self.update_last_cpm_date()
-                    if self.rgb_remove:    self._remove_rgb_images()	# remove rgb images from directory
-                    self.next()				# stats counter
-                else:
-                    rospy.loginfo('nothing interesting was detected, I will delete this folder!')
-                    self.delete_last_learning()
-                    self.remove_uuid_folder()
-                    self.removed+=1
-                    self.next()
+            #print self.empty_date
+            if self.empty_date or self.rgb_files==[]:
+                rospy.loginfo("found an empty date folder")
+                self.next()
+            else:
+                self.person_found_flag = 0
+                for rgb, depth, skl in zip(self.rgb_files, self.dpt_files, self.skl_files):
+                    if self._as.is_preempt_requested():
+                         stop_flag_pre=1; break
+                    if (end - start).secs > duration:
+                         stop_flag_dur=1; break
+                    self._process_images(rgb, depth, skl)
+                    end = rospy.Time.now()
+                    self.img_processed+=1				# counts the number of processed images
+                if not stop_flag_pre and not stop_flag_dur:
+                    self.processed+=1				# stats counter
+                    if self.person_found_flag > self.threshold:
+                        self.update_last_learning()
+                        self.update_last_cpm_date()
+                        if self.rgb_remove:    self._remove_rgb_images()	# remove rgb images from directory
+                        self.next()				# stats counter
+                    else:
+                        rospy.loginfo('nothing interesting was detected, I will delete this folder!')
+                        self.delete_last_learning()
+                        self.remove_uuid_folder()
+                        self.removed+=1
+                        self.next()
                          
         # after the action reset everything
         self._cpm_stats(stats_start, duration, stop_flag_pre, stop_flag_dur)
@@ -164,6 +174,7 @@ class skeleton_cpm():
         rospy.loginfo('removing: '+self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
         shutil.rmtree(self.directory+self.dates[self.folder]+'/'+self.files[self.userid])
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
+        self.userid-=1
         #print len(self.files)
         #sys.exit(1)
 
@@ -230,21 +241,32 @@ class skeleton_cpm():
             self.next()
         
     def _read_files(self):
+        self.empty_date = 0
+        self.rgb_files = []
         self.files = sorted(os.listdir(self.directory+self.dates[self.folder]))
-        self.rgb_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb/'
-        self.dpt_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/depth/'
-        self.skl_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/skeleton/'
-        self.cpm_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_skeleton/'
-        self.cpm_img_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_images/'
-        self.rgb_files = sorted(glob.glob(self.rgb_dir+"*.jpg"))
-        self.dpt_files = sorted(glob.glob(self.dpt_dir+"*.jpg"))
-        self.skl_files = sorted(glob.glob(self.skl_dir+"*.txt"))
-        rospy.loginfo('Processing userid: '+self.files[self.userid])
-        if not os.path.isdir(self.cpm_dir):
-            os.mkdir(self.cpm_dir)
+        if self.files != []:		# empty folders
+           #print ">", self.folder
+           #print ">>", self.directory+self.dates[0]
+           #print ">", self.directory, self.folder, self.userid
+           #print ">>", self.dates, self.files
+           self.rgb_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/rgb/'
+           self.dpt_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/depth/'
+           self.skl_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/skeleton/'
+           self.cpm_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_skeleton/'
+           self.cpm_img_dir = self.directory+self.dates[self.folder]+'/'+self.files[self.userid]+'/cpm_images/'
+           self.rgb_files = sorted(glob.glob(self.rgb_dir+"*.jpg"))
+           self.dpt_files = sorted(glob.glob(self.dpt_dir+"*.jpg"))
+           self.skl_files = sorted(glob.glob(self.skl_dir+"*.txt"))
+           rospy.loginfo('Processing userid: '+self.files[self.userid])
+           if not os.path.isdir(self.cpm_dir):
+             os.mkdir(self.cpm_dir)
 
-        if not os.path.isdir(self.cpm_img_dir) and self.save_cpm_img:
-            os.mkdir(self.cpm_img_dir)
+           if not os.path.isdir(self.cpm_img_dir) and self.save_cpm_img:
+             os.mkdir(self.cpm_img_dir)
+        else:
+           self.empty_date = 1
+           rospy.loginfo("I found an empty date folder, this should not happen.")
+           #sys.exit(1)
             
     def next(self):
         self.userid+=1
@@ -256,6 +278,9 @@ class skeleton_cpm():
             self.finished_processing = 1
         else:
             self._read_files() 
+        #print '>>',self.userid
+        #print '>>',self.folder
+        #print '>>> test',self.empty_date
 
     def _process_images(self,test_image,test_depth,test_skl):
         # block 1
@@ -367,7 +392,8 @@ class skeleton_cpm():
         # block 10
         limbs = self.model['limbs']
         canvas = imageToTest.copy()
-        canvas *= .5 # for transparency
+        #canvas *= .5 # for transparency
+        canvas = np.multiply(canvas,0.5,casting="unsafe")
         if num_people:
             self.person_found_flag += 1		# this is used to prevent the deletion of the entire folder if noe person is found
             self._get_depth_data(prediction,depthToTest)
@@ -384,11 +410,11 @@ class skeleton_cpm():
                     cv.fillConvexPoly(cur_canvas, polygon, self.colors[l])
                     cv.fillConvexPoly(depthToTest, polygon, self.colors[l])
                 cv.circle(cur_canvas,(int(self.x[0]),int(self.y[0])), 3, (250,0,210), -1)
-                canvas += cur_canvas * 0.5 # for transparency
+                canvas = np.add(canvas,np.multiply(cur_canvas,0.5,casting="unsafe"),casting="unsafe") # for transparency
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person found"
         else:
             print 'image '+ self.name +' processed in: %2.3f' %(time.time() - start_time), "person not found"
-        vis = np.concatenate((canvas, depthToTest), axis=1)
+        vis = np.concatenate((canvas.astype(np.uint8), depthToTest), axis=1)
         # saving cpm images
         if self.save_cpm_img:
             cv.imwrite(self.cpm_img_dir+self.name+'.jpg',vis)

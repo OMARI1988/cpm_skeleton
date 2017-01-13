@@ -6,6 +6,7 @@ from IPython.display import Image, display
 import cv2
 import getpass
 import sys
+import yaml
 
 def make_X(x,z,fx,fy,cx,cy):
     return int(x*fx/z +cx)
