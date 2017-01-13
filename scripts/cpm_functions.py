@@ -186,14 +186,34 @@ class skeleton_cpm():
         self.msg_store.update(message=msg, message_query=query, upsert=True)
 
     def update_last_learning(self):
-        msg = HumanActivities()
-        msg.date = self.dates[self.folder]
-        msg.uuid = self.files[self.userid].split('_')[-1]
-        msg.time = self.files[self.userid].split('_')[-2]
-        msg.cpm = True
-        print "adding %s to activity learning store" % msg.uuid
-        query = {"uuid" : msg.uuid}
-        self.msg_store_learning.update(message=msg, message_query=query, upsert=True)
+
+        uuid = self.files[self.userid].split('_')[-1]
+        query = {"uuid" : uuid}
+        result = self.msg_store_learning.query(type=HumanActivities._type, message_query=query)
+
+        for cnt, (msg, meta) in enumerate(result):
+            msg.cpm = True
+            print "updating %s to activity learning store" % msg.uuid
+            self.msg_store_learning.update(message=msg, message_query=query, upsert=True)
+
+        if len(result) == 0:
+            msg = HumanActivities()
+            msg.date = self.dates[self.folder]
+            msg.uuid = self.files[self.userid].split('_')[-1]
+            msg.time = self.files[self.userid].split('_')[-2]
+            msg.cpm = True
+            self.msg_store_learning.insert(message=msg)
+            print "adding %s to activity learning store" % msg.uuid
+
+    #def update_last_learning(self):
+    #    msg = HumanActivities()
+    #    msg.date = self.dates[self.folder]
+    #    msg.uuid = self.files[self.userid].split('_')[-1]
+    #    msg.time = self.files[self.userid].split('_')[-2]
+    #    msg.cpm = True
+    #    print "adding %s to activity learning store" % msg.uuid
+    #    query = {"uuid" : msg.uuid}
+    #    self.msg_store_learning.update(message=msg, message_query=query, upsert=True)
 
     def get_dates_to_process(self):
         """ Find the sequence of date folders (on disc) which have not been processed into QSRs.
