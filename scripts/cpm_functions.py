@@ -456,7 +456,7 @@ class skeleton_cpm():
         z = (.4)/(20.0)*(depth_val-60.0) + 2.7
         if np.abs(z-self.openni_values[jname]['z'])>self.depth_thresh:
             z = self.openni_values[jname]['z']   
-        x = (y2d/self.scale-cx)*z/fx
-        y = (x2d/self.scale-cy)*z/fy
-        f1.write('torso'+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
+        x = (y2d-cx)*z/fx
+        y = (x2d-cy)*z/fy
+        f1.write('torso'+','+str(y2d)+','+str(x2d)+','+str(x)+','+str(y)+','+str(z)+'\n')
         f1.close()
