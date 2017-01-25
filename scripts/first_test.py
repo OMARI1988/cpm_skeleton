@@ -180,6 +180,9 @@ for p in range(num_people):
 ends['block_10'].append(time.time())
 ends['all'].append(time.time())
 name = test_image.split('.')[0]
+
+print "GPU is working"
+
 util.showBGRimage(name+'_results',canvas,3000)
 
 for i,j in zip(starts['all'],ends['all']):
