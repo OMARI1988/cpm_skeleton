@@ -11,6 +11,12 @@ Shih-En Wei, Varun Ramakrishna, Takeo Kanade, Yaser Sheikh, "[Convolutional Pose
 This project is licensed under the terms of the GPL v2 license. By using the software, you are agreeing to the terms of the [license agreement](https://github.com/shihenw/convolutional-pose-machines-release/blob/master/LICENSE.md).
 
 # Installation process
+## Prerequisites
+- Ensure you have `libprotobuf-dev` and `protobuf-compiler` installed to avoid any error later, by running:
+```
+sudo apt-get install libprotobuf-dev protobuf-compiler
+```
+
 ## Installing Caffe
 - `mkdir ~/sk_cpm`
 - `cd ~/sk_cpm`
