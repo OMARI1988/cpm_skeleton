@@ -75,7 +75,7 @@ you have to get cudNN and sudo pip install protobuf and sudo pip install configo
 
 ## Pythonpath for cuda
 - add python path of caffe to bashrc
-- `export PYTHONPATH=$PYTHONPATH:"~/sk_cpm/caffe/python/"`
+- `export PYTHONPATH=$PYTHONPATH:~/sk_cpm/caffe/python/`
 
 ## Installing cpm_skeleton in your catkin_Ws
 - `cd ~/wherever_your_catkin_ws/src/`
@@ -91,5 +91,10 @@ you have to get cudNN and sudo pip install protobuf and sudo pip install configo
 - `roscd cpm_skeleton/scripts/`
 - `python first_test.py`
 - you should see an output image like this for 1 sec
+
+If you get any errors when you are running the `first_test.py` then try to install the following:
+```
+sudo pip install scikit-image
+```
 
 ![marker](https://raw.githubusercontent.com/OMARI1988/cpm_skeleton/master/data/rgb_00216_results.jpg)
