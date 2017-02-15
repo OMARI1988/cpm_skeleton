@@ -75,7 +75,7 @@ you have to get cudNN and sudo pip install protobuf and sudo pip install configo
 
 ## Pythonpath for cuda
 - add python path of caffe to bashrc
-- `export PYTHONPATH=$PYTHONPATH:"~/sk_cnn/caffe/python/"`
+- `export PYTHONPATH=$PYTHONPATH:"~/sk_cpm/caffe/python/"`
 
 ## Installing cpm_skeleton in your catkin_Ws
 - `cd ~/wherever_your_catkin_ws/src/`
