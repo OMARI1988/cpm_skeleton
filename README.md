@@ -11,6 +11,32 @@ Shih-En Wei, Varun Ramakrishna, Takeo Kanade, Yaser Sheikh, "[Convolutional Pose
 This project is licensed under the terms of the GPL v2 license. By using the software, you are agreeing to the terms of the [license agreement](https://github.com/shihenw/convolutional-pose-machines-release/blob/master/LICENSE.md).
 
 # Installation process
+## Prerequisites
+- Ensure you have `libprotobuf-dev` and `protobuf-compiler` installed:
+```
+sudo apt-get install libprotobuf-dev protobuf-compiler
+```
+- Ensure you also have `libhdf5-serial-dev` installed:
+```
+apt-get install libhdf5-serial-dev
+```
+- Ensure you have `libgflags-dev`, `libgoogle-glog-dev` and `liblmdb-dev` installed:
+```
+sudo apt-get install libgflags-dev libgoogle-glog-dev liblmdb-dev
+```
+- Ensure you have `libleveldb-dev` installed:
+```
+sudo apt-get install libleveldb-dev
+```
+- Ensure you have `libsnappy-dev` installed:
+```
+sudo apt-get install libsnappy-dev
+```
+- Ensure you have `libatlas-base-dev` and `libatlas-dev` installed:
+```
+sudo apt-get install libatlas-base-dev libatlas-dev
+```
+
 ## Installing Caffe
 - `mkdir ~/sk_cpm`
 - `cd ~/sk_cpm`
@@ -49,7 +75,7 @@ you have to get cudNN and sudo pip install protobuf and sudo pip install configo
 
 ## Pythonpath for cuda
 - add python path of caffe to bashrc
-- `export PYTHONPATH=$PYTHONPATH:"~/sk_cnn/caffe/python/"`
+- `export PYTHONPATH=$PYTHONPATH:~/sk_cpm/caffe/python/`
 
 ## Installing cpm_skeleton in your catkin_Ws
 - `cd ~/wherever_your_catkin_ws/src/`
@@ -65,5 +91,10 @@ you have to get cudNN and sudo pip install protobuf and sudo pip install configo
 - `roscd cpm_skeleton/scripts/`
 - `python first_test.py`
 - you should see an output image like this for 1 sec
+
+If you get any errors when you are running the `first_test.py` then try to install the following:
+```
+sudo pip install scikit-image
+```
 
 ![marker](https://raw.githubusercontent.com/OMARI1988/cpm_skeleton/master/data/rgb_00216_results.jpg)
