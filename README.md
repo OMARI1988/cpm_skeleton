@@ -12,9 +12,29 @@ This project is licensed under the terms of the GPL v2 license. By using the sof
 
 # Installation process
 ## Prerequisites
-- Ensure you have `libprotobuf-dev` and `protobuf-compiler` installed to avoid any error later, by running:
+- Ensure you have `libprotobuf-dev` and `protobuf-compiler` installed:
 ```
 sudo apt-get install libprotobuf-dev protobuf-compiler
+```
+- Ensure you also have `libhdf5-serial-dev` installed:
+```
+apt-get install libhdf5-serial-dev
+```
+- Ensure you have `libgflags-dev`, `libgoogle-glog-dev` and `liblmdb-dev` installed:
+```
+sudo apt-get install libgflags-dev libgoogle-glog-dev liblmdb-dev
+```
+- Ensure you have `libleveldb-dev` installed:
+```
+sudo apt-get install libleveldb-dev
+```
+- Ensure you have `libsnappy-dev` installed:
+```
+sudo apt-get install libsnappy-dev
+```
+- Ensure you have `libatlas-base-dev` and `libatlas-dev` installed:
+```
+sudo apt-get install libatlas-base-dev libatlas-dev
 ```
 
 ## Installing Caffe
