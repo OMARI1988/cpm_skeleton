@@ -87,8 +87,8 @@ class skeleton_cpm():
         if not self.processing:
             img = self.bridge.imgmsg_to_cv2(imgmsg, desired_encoding="passthrough")
             img = img[:,:,0:3]
-            cv2.imshow('camera feed',img)
-            cv2.waitKey(1)
+            #cv2.imshow('camera feed',img)
+            #cv2.waitKey(1)
             self.image = img
             self.image_ready = 1
         
@@ -97,46 +97,25 @@ class skeleton_cpm():
     def _process_images(self,img):#,depth):
         self.processing = 1
         self.image_ready = 0
-        #rospack = rospkg.RosPack()
-        #path = rospack.get_path('cpm_skeleton')
-        #test_image = path+'/data/rgb_00216.jpg'
-        #img = cv2.imread(test_image)
-
-        # time stuff
-        starts = {}
-        ends = {}
-        starts['all'] = []
-        ends['all'] = []
-
 
         # main loop
-        starts['all'].append(time.time())
+        start = time.time()
 
         # block 1
-        #starts['block_1'].append(time.time())
-        #test_image = path+'/data/rgb_00216.jpg'
-        #img = cv2.imread(test_image)
         scale = self.boxsize/(img.shape[0] * 1.0)
         imageToTest = cv2.resize(img, (0,0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         imageToTest_padded, pad = util.padRightDownCorner(imageToTest)
-        #ends['block_1'].append(time.time())
 
         # block 2
-        #starts['block_2'].append(time.time())
         self.person_net.blobs['image'].reshape(*(1, 3, imageToTest_padded.shape[0], imageToTest_padded.shape[1]))
         self.person_net.reshape()
-        #person_net.forward(); # dry run to avoid GPU synchronization later in caffe
-        #ends['block_2'].append(time.time())
 
         # block 3
-        #starts['block_3'].append(time.time())
         self.person_net.blobs['image'].data[...] = np.transpose(np.float32(imageToTest_padded[:,:,:,np.newaxis]), (3,2,0,1))/256 - 0.5;
         output_blobs = self.person_net.forward()
         person_map = np.squeeze(self.person_net.blobs[output_blobs.keys()[0]].data)
-        #ends['block_3'].append(time.time())
 
         # block 4
-        #starts['block_4'].append(time.time())
         person_map_resized = cv2.resize(person_map, (0,0), fx=8, fy=8, interpolation=cv2.INTER_CUBIC)
         data_max = scipy.ndimage.filters.maximum_filter(person_map_resized, 3)
         maxima = (person_map_resized == data_max)
@@ -144,10 +123,8 @@ class skeleton_cpm():
         maxima[diff == 0] = 0
         x = np.nonzero(maxima)[1]
         y = np.nonzero(maxima)[0]
-        #ends['block_4'].append(time.time())
 
         # block 5
-        #starts['block_5'].append(time.time())
         num_people = x.size
         person_image = np.ones((self.model['boxsize'], self.model['boxsize'], 3, num_people)) * 128
         for p in range(num_people):
@@ -176,10 +153,8 @@ class skeleton_cpm():
 	        else:
 		        yn_max = self.model['boxsize']
 	        person_image[yn_min:yn_max, xn_min:xn_max, :, p] = imageToTest[y_min:y_max, x_min:x_max, :]
-        #ends['block_5'].append(time.time())
 
         # block 6
-        #starts['block_6'].append(time.time())
         gaussian_map = np.zeros((self.model['boxsize'], self.model['boxsize']))
         x_p = np.arange(self.model['boxsize'])
         y_p = np.arange(self.model['boxsize'])
@@ -188,11 +163,8 @@ class skeleton_cpm():
         dist_sq = np.transpose(np.matrix(part1))*np.matrix(part2)
         exponent = dist_sq / 2.0 / self.model['sigma'] / self.model['sigma']
         gaussian_map = np.exp(-exponent)
-        #ends['block_6'].append(time.time())
 
         # block 7
-        #starts['block_7'].append(time.time())
-        #self.pose_net.forward() # dry run to avoid GPU synchronization later in caffe
         output_blobs_array = [dict() for dummy in range(num_people)]
         for p in range(num_people):
             input_4ch = np.ones((self.model['boxsize'], self.model['boxsize'], 4))
@@ -203,19 +175,15 @@ class skeleton_cpm():
 	         output_blobs_array[p] = copy.deepcopy(self.pose_net.forward()['Mconv5_stage4'])
             else:
 	         output_blobs_array[p] = copy.deepcopy(self.pose_net.forward()['Mconv7_stage6'])
-        #ends['block_7'].append(time.time())
 
         # block 8
-        #starts['block_8'].append(time.time())
         for p in range(num_people):
             print('Person %d' % p)
             for part in [0,3,7,10,12]: # sample 5 body parts: [head, right elbow, left wrist, right ankle, left knee]
 	        part_map = output_blobs_array[p][0,part,:,:]
 	        part_map_resized = cv2.resize(part_map, (0,0), fx=4, fy=4, interpolation=cv2.INTER_CUBIC) #only for displaying
-        #ends['block_8'].append(time.time())
 
         # block 9
-        #starts['block_9'].append(time.time())
         prediction = np.zeros((14, 2, num_people))
         for p in range(num_people):
             for part in range(14):
@@ -225,10 +193,8 @@ class skeleton_cpm():
             # mapped back on full image
             prediction[:,0,p] = prediction[:,0,p] - (self.model['boxsize']/2) + y[p]
             prediction[:,1,p] = prediction[:,1,p] - (self.model['boxsize']/2) + x[p]
-        #ends['block_9'].append(time.time())
 
         # block 10
-        #starts['block_10'].append(time.time())
         limbs = self.model['limbs']
         stickwidth = 6
         colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
@@ -251,15 +217,13 @@ class skeleton_cpm():
 	        cv2.fillConvexPoly(cur_canvas, polygon, colors[l])
                 #print int(mY),int(mX),int(length/2)
             canvas = np.add(canvas,np.multiply(cur_canvas,0.4,casting="unsafe"),casting="unsafe") # for transparency
-        #ends['block_10'].append(time.time())
-        ends['all'].append(time.time())
         name = ''
-
-
-        util.showBGRimage(name+'_results',canvas,1)
-
-        for i,j in zip(starts['all'],ends['all']):
-	        print 'the total time is:',j-i
-        
+        print 'image processed in: %1.3f sec' % (time.time()-start)
+        #util.showBGRimage(name+'_results',canvas,1)
+        if self.pub:
+            sys.stdout = open(os.devnull, "w")
+            msg = self.bridge.cv2_to_imgmsg(canvas, "bgr8")
+            sys.stdout = sys.__stdout__
+            self.image_pub.publish(msg)
         self.processing = 0
 
