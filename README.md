@@ -5,7 +5,7 @@ Contact: Muhannad Alomari, scmara@leeds.ac.uk.
 
 ![marker](https://raw.githubusercontent.com/OMARI1988/cpm_skeleton/master/data/rgb_00216_results.jpg)
 
-# If you use this code, please cite:
+## If you use this code, please cite:
 Paul Duckworth, Muhannad Alomari, David C. Hogg and Anthony G. Cohn. "Latent Dirichlet Allocation for Unsupervised Activity Analysis on an Autonomous Mobile Robot". In Proceedings of the 31st AAAI Conference on Artificial Intelligence, (http://eprints.whiterose.ac.uk/109105/), AAAI-17.
 
 # Convolutional Pose Machines
