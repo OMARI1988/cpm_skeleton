@@ -22,6 +22,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import String, Header
 from cpm_skeleton.msg import cpm_pointer, cpmAction, cpmActionResult
 from skeleton_tracker.msg import skeleton_message, joint_message, skeleton_tracker_state
+from geometry_msgs.msg import Pose
 import sys
 import actionlib
 import shutil
@@ -122,7 +123,7 @@ class skeleton_cpm():
             self.depth_ready = 1
 
     def _get_openni_state(self,msg):
-        print msg
+        #print msg
         if msg.message in ["Out of Scene","Stopped tracking"]:
             self.openni_to_delet.append(msg.userID)
 
@@ -201,7 +202,6 @@ class skeleton_cpm():
         # block 5
         num_people = x.size
         person_image = np.ones((self.model['boxsize'], self.model['boxsize'], 3, num_people)) * 128
-        print self.model['boxsize']
         for p in range(num_people):
 	        x_max = x[p]+self.model['boxsize']/2
 	        x_min = x[p]-self.model['boxsize']/2
@@ -256,7 +256,6 @@ class skeleton_cpm():
 
         # block 8
         for p in range(num_people):
-            #print('Person %d' % p)
             for part in [0,3,7,10,12]: # sample 5 body parts: [head, right elbow, left wrist, right ankle, left knee]
 	        part_map = output_blobs_array[p][0,part,:,:]
 	        part_map_resized = cv2.resize(part_map, (0,0), fx=4, fy=4, interpolation=cv2.INTER_CUBIC) #only for displaying
@@ -274,7 +273,7 @@ class skeleton_cpm():
             # mapped back on full image
             prediction[:,0,p] = prediction[:,0,p] - (self.model['boxsize']/2) + y[p]
             prediction[:,1,p] = prediction[:,1,p] - (self.model['boxsize']/2) + x[p]
-            #self._get_depth_data(prediction,depthToTest,p)
+            self._get_depth_data(prediction, depthToTest, userID, img_xy, p)
         #print "block9",time.time()-start
 
         # block 10
@@ -308,7 +307,6 @@ class skeleton_cpm():
         self.image[y_max-2:y_max, x_min:x_max, :] = self.colors[userID]
         self.image[y_min:y_max, x_min:x_min+2, :] = self.colors[userID]
         self.image[y_min:y_max, x_max-2:x_max, :] = self.colors[userID]
-	#print canvas
         print 'image processed in: %1.3f sec' % (time.time()-start), "people found: ",num_people
         #util.showBGRimage(name+'_results',canvas,1)
 
@@ -320,41 +318,42 @@ class skeleton_cpm():
             self.image_pub.publish(msg)
         self.processing = 0
 
-    def _get_depth_data(self, prediction, depthToTest, p):
+    def _get_depth_data(self, prediction, depthToTest, userID, img_xy, p):
         [fx,fy,cx,cy] = self.camera_calib
+        x_min, x_max, y_min, y_max = img_xy
+        
         # add the torso position
-        x2d = np.min([int(self.y[p]),367])
-        y2d = np.min([int(self.x[p]),490])     
-	print self._get_correct_person(y2d, x2d)
-        z = depthToTest[x2d, y2d]
-        x = (y2d/self.scale-cx)*z/fx
-        y = (x2d/self.scale-cy)*z/fy
+        #x2d = np.min([int(self.y[p]),367])
+        #y2d = np.min([int(self.x[p]),490])     
+        #z = depthToTest[x2d, y2d]
+        #x = (y2d/self.scale-cx)*z/fx
+        #y = (x2d/self.scale-cy)*z/fy
 	# the rest of the body joints
         for part,jname in enumerate(self.limbs_names):
             x2d = np.min([int(prediction[part, 0, p]),367])
             y2d = np.min([int(prediction[part, 1, p]),490])
             z = depthToTest[x2d, y2d]
+            if not np.abs(z-self.openni_data[userID][jname][4])<self.depth_thresh:
+                z = self.openni_data[userID][jname][4]
+            x2d += y_min
+            y2d += x_min
             x = (y2d/self.scale-cx)*z/fx
             y = (x2d/self.scale-cy)*z/fy
-            #print "person:",p,jname+','+str(x2d)+','+str(y2d)+','+str(x)+','+str(y)+','+str(z)
+            #j = joint_message
+            #j.name = jname
+            #j.pose.position.x = x
+            #j.pose.position.y = y
+            #j.pose.position.z = z
+            #po = Pose
+            #po.position.x = x
+            #j.pose = po
+            #print "person:",p,jname+','+str(y2d)+','+str(x2d)+','+str(x)+','+str(y)+','+str(z)
+            #print "person:",p,jname, self.openni_data[userID][jname]
+            #self.openni_data[userID][jname] = 
 
-        #print "person:",p,'torso'+','+str(y2d)+','+str(x2d)+','+str(x)+','+str(y)+','+str(z)
-        #print '----------------------------'
 
-    def _get_correct_person(self, x2d, y2d):
-        distance_min = 1000
-        distance_threshold = 50
-        person = []
-        for p in self.openni_data:
-            x1,y1 = self.openni_data[p]["torso"][0:2]
-            distance = np.sqrt( (x2d-x1)**2 + (y2d-y1)**2 )
-            if distance < distance_min and distance < distance_threshold:
-                person = p
-                distance_min = distance
-        if person != []:
-            return p
-        else:
-            return None
+
+
 
 
 
