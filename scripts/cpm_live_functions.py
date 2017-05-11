@@ -200,29 +200,33 @@ class skeleton_cpm():
         colors = [[0, 0, 255], [0, 170, 255], [0, 255, 170], [0, 255, 0], [170, 255, 0],
         [255, 170, 0], [255, 0, 0], [255, 0, 170], [170, 0, 255]] # note BGR ...
         canvas = imageToTest.copy()
-        canvas = np.multiply(canvas,0.6,casting="unsafe")
-        #canvas *= .6 # for transparency
-        for p in range(num_people):
-            for part in range(self.model['np']):
-	        cv2.circle(canvas, (int(prediction[part, 1, p]), int(prediction[part, 0, p])), 3, (0, 0, 0), -1)
-            cur_canvas = np.zeros(canvas.shape,dtype=np.uint8)
-            for l in range(limbs.shape[0]):
-	        X = prediction[limbs[l,:]-1, 0, p]
-	        Y = prediction[limbs[l,:]-1, 1, p]
-	        mX = np.mean(X)
-	        mY = np.mean(Y)
-	        length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
-	        angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
-	        polygon = cv2.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
-	        cv2.fillConvexPoly(cur_canvas, polygon, colors[l])
-                #print int(mY),int(mX),int(length/2)
-            canvas = np.add(canvas,np.multiply(cur_canvas,0.4,casting="unsafe"),casting="unsafe") # for transparency
+        if num_people>0:
+            canvas = np.multiply(canvas,0.2,casting="unsafe")
+            #canvas *= .6 # for transparency
+            cur_canvas = imageToTest.copy() #np.zeros(canvas.shape,dtype=np.uint8)
+            for p in range(num_people):
+                for part in range(self.model['np']):
+	            cv2.circle(canvas, (int(prediction[part, 1, p]), int(prediction[part, 0, p])), 3, (0, 0, 0), -1)
+                for l in range(limbs.shape[0]):
+	            X = prediction[limbs[l,:]-1, 0, p]
+	            Y = prediction[limbs[l,:]-1, 1, p]
+	            mX = np.mean(X)
+	            mY = np.mean(Y)
+	            length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
+	            angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
+	            polygon = cv2.ellipse2Poly((int(mY),int(mX)), (int(length/2), stickwidth), int(angle), 0, 360, 1)
+	            cv2.fillConvexPoly(cur_canvas, polygon, colors[l])
+                    #print int(mY),int(mX),int(length/2)
+            canvas = np.add(canvas,np.multiply(cur_canvas,0.8,casting="unsafe"),casting="unsafe") # for transparency
+
+        canvas = canvas.astype(np.uint8)
+	#print canvas
         name = ''
         print 'image processed in: %1.3f sec' % (time.time()-start)
         #util.showBGRimage(name+'_results',canvas,1)
         if self.pub:
             sys.stdout = open(os.devnull, "w")
-            msg = self.bridge.cv2_to_imgmsg(canvas, "bgr8")
+            msg = self.bridge.cv2_to_imgmsg(canvas, "rgb8")
             sys.stdout = sys.__stdout__
             self.image_pub.publish(msg)
         self.processing = 0

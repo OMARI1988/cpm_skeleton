@@ -10,11 +10,11 @@ import cpm_live_functions
 class live_cpm():
     def __init__(self):
         cam = rospy.get_param("~camera_calibration","")
-        pub = rospy.get_param("~publish_images","")
+        pub = rospy.get_param("~publish_images","True")
         sav = rospy.get_param("~save_images","")
-        topic = rospy.get_param("~image","/cameras/head_camera/image")
+        topic = rospy.get_param("~image","/head_xtion/rgb/image_raw")
         self.sk_cpm = cpm_live_functions.skeleton_cpm(cam,topic,pub,sav)
-        r = rospy.Rate(30) # 10hz
+        r = rospy.Rate(30) # 30hz
         while not rospy.is_shutdown():
             if self.sk_cpm.image_ready:
                 self.sk_cpm._process_images(self.sk_cpm.image)
