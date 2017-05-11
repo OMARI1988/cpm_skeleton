@@ -193,12 +193,15 @@ class skeleton_cpm():
         maxima[diff == 0] = 0
         x = np.nonzero(maxima)[1]
         y = np.nonzero(maxima)[0]
+        if x.size > 1:
+            x = x[0]; y = y[0]
         self.x = x; self.y = y
         #print "block4",time.time()-start
 
         # block 5
         num_people = x.size
         person_image = np.ones((self.model['boxsize'], self.model['boxsize'], 3, num_people)) * 128
+        print self.model['boxsize']
         for p in range(num_people):
 	        x_max = x[p]+self.model['boxsize']/2
 	        x_min = x[p]-self.model['boxsize']/2
