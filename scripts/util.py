@@ -71,6 +71,7 @@ def get_correct_person(openni_values,scale,camera_calib,X,Y):
         distance = np.sqrt((x1-x2d)**2 + (y1-y2d)**2)
         if distance < distance_min and distance < distance_threshold:
             person = id
+            distance_min = distance
         id+=1
     if person != []:
         x = [X[person]]; y = [Y[person]]
